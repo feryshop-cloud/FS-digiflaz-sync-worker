@@ -1,0 +1,15 @@
+{
+	"name": "fs-digiflaz-sync-worker",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-01",
+	"observability": {
+		"enabled": true,
+	},
+	"vars": {
+		"DIGIFLAZZ_BASE_URL": "https://api.digiflazz.com/v1",
+		"DIGIFLAZZ_USE_DUMMY": "true",
+	},
+	"triggers": {
+		"crons": ["*/10 * * * *"],
+	},
+}
