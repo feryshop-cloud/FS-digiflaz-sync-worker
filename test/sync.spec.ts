@@ -74,8 +74,8 @@ function fetchMock(url: string | URL | Request, init?: RequestInit): Promise<Res
 		expect(body).toBeTruthy();
 		expect(Array.isArray(body.payload)).toBe(true);
 		expect(body.payload.length).toBe(2);
-		expect(body.payload[0]).toMatchObject({ id: 'CODM-31', game_slug: 'call-of-duty-mobile', category_id: 1, selling_price: 5000 });
-		expect(body.payload[1]).toMatchObject({ id: 'ML-70', game_slug: 'mobile-legends', category_id: null, selling_price: 15000 });
+		expect(body.payload[0]).toMatchObject({ id: 'CODM-31', game_slug: 'call-of-duty-mobile', brand: 'call-of-duty-mobile', category_id: 1, selling_price: 5000 });
+		expect(body.payload[1]).toMatchObject({ id: 'ML-70', game_slug: 'mobile-legends', brand: 'Mobile Legends', category_id: null, selling_price: 15000 });
 		return Promise.resolve(jsonResponse({}));
 	}
 	if (u.includes('/products?select=id')) {

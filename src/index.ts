@@ -108,6 +108,7 @@ function mapItemToSyncRow(item: DigiflazzPriceItem, game: GameRow, categoryId: n
 		title: item.product_name,
 		selling_price: item.price,
 		game_slug: game.slug,
+		brand: item.brand,
 		category_id: categoryId,
 		description: item.desc,
 		start_cut_off: item.start_cut_off,

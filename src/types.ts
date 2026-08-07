@@ -27,6 +27,7 @@ export interface SyncRow {
 	title: string;
 	selling_price: number;
 	game_slug: string;
+	brand: string;
 	category_id: number | null;
 	description: string;
 	start_cut_off: string;
