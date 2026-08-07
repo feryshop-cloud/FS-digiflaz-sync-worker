@@ -105,7 +105,6 @@ function buildCategoryLookup(categories: CategoryRow[]): Map<string, number> {
 function mapItemToSyncRow(item: DigiflazzPriceItem, game: GameRow, categoryId: number | null): SyncRow {
 	const sku = item.buyer_sku_code;
 	return {
-		id: sku,
 		title: item.product_name,
 		selling_price: item.price,
 		game_slug: game.slug,
@@ -139,31 +138,32 @@ async function callSyncRpc(env: Env, rows: SyncRow[]): Promise<void> {
  * batch yang disinkronkan jauh lebih kecil dari baseline existing (upstream
  * glitch/downstream reset) supaya tidak mematikan toko via NULL-deactivate.
  */
-async function markStale(env: Env, syncedIds: string[]): Promise<{ marked: number; aborted: boolean }> {
-	if (syncedIds.length === 0) return { marked: 0, aborted: true };
-	const response = await fetch(`${env.SUPABASE_URL}/rest/v1/products?select=id&provider=eq.digiflazz`, {
+async function markStale(env: Env, syncedSkus: string[]): Promise<{ marked: number; aborted: boolean }> {
+	if (syncedSkus.length === 0) return { marked: 0, aborted: true };
+	const response = await fetch(`${env.SUPABASE_URL}/rest/v1/products?select=sku&provider=eq.digiflazz&sku=not.is.null`, {
 		headers: SUPA_HEADERS(env),
 		cache: 'no-store',
 	});
 	if (!response.ok) throw new Error(`products fetch HTTP ${response.status}`);
-	const rows = (await response.json()) as { id: string }[];
-	if (rows.length === 0) return { marked: 0, aborted: true };
+	const rows = (await response.json()) as { sku: string }[];
+	const existingSkus = rows.map((r) => r.sku);
+	if (existingSkus.length === 0) return { marked: 0, aborted: true };
 	const ratio = Number(env.STALE_GUARD_RATIO) || 0.3;
-	if (syncedIds.length / rows.length < ratio) {
-		console.warn(`sync: stale-guard abort (synced ${syncedIds.length}/${rows.length} < ${ratio}) — upstream likely partial`);
+	if (syncedSkus.length / existingSkus.length < ratio) {
+		console.warn(`sync: stale-guard abort (synced ${syncedSkus.length}/${existingSkus.length} < ${ratio}) — upstream likely partial`);
 		return { marked: 0, aborted: true };
 	}
-	const current = new Set(rows.map((r) => r.id));
-	const synced = new Set(syncedIds);
-	const staleIds = rows.filter((r) => !synced.has(r.id)).map((r) => r.id);
-	if (staleIds.length === 0) return { marked: 0, aborted: false };
+	const current = new Set(existingSkus);
+	const synced = new Set(syncedSkus);
+	const staleSkus = existingSkus.filter((sku) => !synced.has(sku));
+	if (staleSkus.length === 0) return { marked: 0, aborted: false };
 
-	// PATCH bulk via not.in; pecah per 100 id agar URL tidak kepanjangan.
+	// PATCH bulk via not.in; pecah per 100 sku agar URL tidak kepanjangan.
 	const CHUNK = 100;
-	for (let i = 0; i < staleIds.length; i += CHUNK) {
-		const chunk = staleIds.slice(i, i + CHUNK);
-		const filter = chunk.map((id) => encodeURIComponent(id)).join(',');
-		const patch = await fetch(`${env.SUPABASE_URL}/rest/v1/products?id=in.(${filter})&provider=eq.digiflazz`, {
+	for (let i = 0; i < staleSkus.length; i += CHUNK) {
+		const chunk = staleSkus.slice(i, i + CHUNK);
+		const filter = chunk.map((sku) => encodeURIComponent(sku)).join(',');
+		const patch = await fetch(`${env.SUPABASE_URL}/rest/v1/products?sku=in.(${filter})&provider=eq.digiflazz`, {
 			method: 'PATCH',
 			headers: SUPA_HEADERS(env),
 			body: JSON.stringify({ is_active: false, last_synced_at: new Date().toISOString() }),
@@ -173,7 +173,7 @@ async function markStale(env: Env, syncedIds: string[]): Promise<{ marked: numbe
 			throw new Error(`stale PATCH HTTP ${patch.status}: ${body}`);
 		}
 	}
-	return { marked: staleIds.length, aborted: false };
+	return { marked: staleSkus.length, aborted: false };
 }
 
 export async function runSync(env: Env): Promise<{ upserted: number; skipped: number; stale: number }> {
@@ -208,7 +208,7 @@ export async function runSync(env: Env): Promise<{ upserted: number; skipped: nu
 
 	const stale = await markStale(
 		env,
-		rows.map((r) => r.id),
+		rows.map((r) => r.sku),
 	);
 	return { upserted: rows.length, skipped, stale: stale.marked };
 }

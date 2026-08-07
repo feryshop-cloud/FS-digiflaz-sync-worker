@@ -74,14 +74,14 @@ function fetchMock(url: string | URL | Request, init?: RequestInit): Promise<Res
 		expect(body).toBeTruthy();
 		expect(Array.isArray(body.payload)).toBe(true);
 		expect(body.payload.length).toBe(2);
-		expect(body.payload[0]).toMatchObject({ id: 'CODM-31', game_slug: 'call-of-duty-mobile', brand: 'call-of-duty-mobile', category_id: 1, selling_price: 5000 });
-		expect(body.payload[1]).toMatchObject({ id: 'ML-70', game_slug: 'mobile-legends', brand: 'Mobile Legends', category_id: null, selling_price: 15000 });
+		expect(body.payload[0]).toMatchObject({ sku: 'CODM-31', game_slug: 'call-of-duty-mobile', brand: 'call-of-duty-mobile', category_id: 1, selling_price: 5000 });
+		expect(body.payload[1]).toMatchObject({ sku: 'ML-70', game_slug: 'mobile-legends', brand: 'Mobile Legends', category_id: null, selling_price: 15000 });
 		return Promise.resolve(jsonResponse({}));
 	}
-	if (u.includes('/products?select=id')) {
-		return Promise.resolve(jsonResponse([{ id: 'CODM-31' }, { id: 'OLD-STALE' }]));
+	if (u.includes('/products?select=sku')) {
+		return Promise.resolve(jsonResponse([{ sku: 'CODM-31' }, { sku: 'OLD-STALE' }]));
 	}
-	if (u.includes('/products?id=in.')) {
+	if (u.includes('/products?sku=in.')) {
 		const body = init?.body ? JSON.parse(String(init.body)) : null;
 		expect(body).toMatchObject({ is_active: false });
 		return Promise.resolve(jsonResponse({}));
@@ -136,13 +136,13 @@ describe('runSync', () => {
 
 	it('aborts stale-marking when upstream batch is far smaller than existing (partial/glitch)', async () => {
 		let patched = false;
-		const manyDb = Array.from({ length: 10 }, (_, i) => ({ id: `STALE-${i}` }));
+		const manyDb = Array.from({ length: 10 }, (_, i) => ({ sku: `STALE-${i}` }));
 		const customFetch: typeof fetch = (url, init) => {
 			const u = String(url);
-			if (u.includes('/products?select=id')) {
+			if (u.includes('/products?select=sku')) {
 				return Promise.resolve(jsonResponse(manyDb)); // 10 produk di DB, synced=2 → 0.2 < 0.9
 			}
-			if (u.includes('/products?id=in.')) {
+			if (u.includes('/products?sku=in.')) {
 				patched = true;
 				return Promise.resolve(jsonResponse({}));
 			}

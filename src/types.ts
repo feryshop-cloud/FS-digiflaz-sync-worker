@@ -23,7 +23,6 @@ export interface SupabaseProductRow {
 }
 
 export interface SyncRow {
-	id: string;
 	title: string;
 	selling_price: number;
 	game_slug: string;

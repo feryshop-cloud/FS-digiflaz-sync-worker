@@ -13,7 +13,8 @@ Repro model: satu Worker (pola sama seperti `FS-email-worker`).
 
 | dummy.json / Digiflaz                         | `products` column                                                         |
 | --------------------------------------------- | ------------------------------------------------------------------------- |
-| `buyer_sku_code`                              | `id` (PK, varchar SKU)                                                    |
+| (tidak dikirim; DB generate)                  | `id` (uuid PK, default `gen_random_uuid()`)                               |
+| `buyer_sku_code`                              | `sku` (unique index parsial, upsert key)                                  |
 | (harus diturunkan dari `buyer_sku_code`/game) | `game_slug`                                                               |
 | `product_name`                                | `title`                                                                   |
 | `price`                                       | `selling_price`                                                           |
@@ -22,7 +23,7 @@ Repro model: satu Worker (pola sama seperti `FS-email-worker`).
 | opsional                                      | `cost_price` (default `0`), `sku` = `id`, `is_gangguan` (default `false`) |
 | `category` (dummy.json)                       | `category_id` — resolve ke `categories.id`                                |
 
-`products.id` = SKU (`varchar(100)` PK). Untuk row yang sudah ada, sync harus **upsert by id** (INSERT … ON CONFLICT (id) DO UPDATE) supaya harga aktif diperbarui tanpa duplikat.
+`products.id` = UUID (default DB). `sku` = buyer_sku_code, index unique parsial. Sync **upsert by `sku`** (INSERT … ON CONFLICT (sku) DO UPDATE) supaya harga aktif diperbarui tanpa duplikat; `id` dibiarkan default DB.
 
 ## Commands
 
