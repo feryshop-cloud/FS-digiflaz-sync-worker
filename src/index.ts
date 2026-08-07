@@ -23,7 +23,8 @@ async function fetchDigiflazzPriceList(env: Env): Promise<DigiflazzPriceItem[]> 
 	// Feature-flag: pakai dummy.json lokal (tanpa tembak API Digiflazz) utk dev/test.
 	if (env.DIGIFLAZZ_USE_DUMMY === 'true' || env.DIGIFLAZZ_USE_DUMMY === '1') {
 		console.log('sync: DIGIFLAZZ_USE_DUMMY=true, using local dummy.json');
-		return dummyData as DigiflazzPriceItem[];
+		if (Array.isArray(dummyData)) return dummyData as DigiflazzPriceItem[];
+		return (dummyData as { data?: DigiflazzPriceItem[] }).data ?? [];
 	}
 	const base = env.DIGIFLAZZ_BASE_URL || 'https://api.digiflazz.com/v1';
 	const sign = md5hex(env.DIGIFLAZZ_USERNAME + env.DIGIFLAZZ_API_KEY + 'pricelist');
@@ -184,6 +185,12 @@ export async function runSync(env: Env): Promise<{ upserted: number; skipped: nu
 	const rows: SyncRow[] = [];
 	let skipped = 0;
 	for (const item of priceList) {
+		const sku = item.buyer_sku_code;
+		if (!sku || sku === 'nan' || sku === 'undefined') {
+			skipped++;
+			console.warn(`sync: skip invalid sku "${sku}" (${item.product_name})`);
+			continue;
+		}
 		const slug = brandToSlug(item.brand);
 		const game = gameLookup.get(slug) || gameLookup.get(brandToSlug(item.category)) || gameLookup.get(item.brand.trim().toLowerCase());
 		if (!game) {
