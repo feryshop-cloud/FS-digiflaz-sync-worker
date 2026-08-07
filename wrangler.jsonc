@@ -3,13 +3,28 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-01",
 	"observability": {
-		"enabled": true,
+		"enabled": false,
+		"head_sampling_rate": 1,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"persist": true,
+			"invocation_logs": true
+		},
+		"traces": {
+			"enabled": false,
+			"persist": true,
+			"head_sampling_rate": 1
+		}
 	},
 	"vars": {
 		"DIGIFLAZZ_BASE_URL": "https://api.digiflazz.com/v1",
 		"DIGIFLAZZ_USE_DUMMY": "true",
+		"SUPABASE_URL": "https://trviikqvvujcibplqwud.supabase.co"
 	},
 	"triggers": {
-		"crons": ["*/10 * * * *"],
-	},
+		"crons": [
+			"0 */8 * * *"
+		]
+	}
 }
