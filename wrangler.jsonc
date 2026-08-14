@@ -1,4 +1,4 @@
-{
+﻿{
 	"name": "fs-digiflaz-sync-worker",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-01",
@@ -20,7 +20,7 @@
 	"vars": {
 		"DIGIFLAZZ_BASE_URL": "https://api.digiflazz.com/v1",
 		"DIGIFLAZZ_USE_DUMMY": "true",
-		"SUPABASE_URL": "https://trviikqvvujcibplqwud.supabase.co"
+		"SUPABASE_URL": "https://xdvlygpaylnicojuvhyk.supabase.co"
 	},
 	"triggers": {
 		"crons": [
