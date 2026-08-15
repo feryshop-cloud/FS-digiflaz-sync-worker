@@ -1,4 +1,5 @@
 import { md5hex } from './md5';
+import { logger } from './utils/logger';
 import type { DigiflazzPriceItem, SyncRow } from './types';
 import dummyData from '../dummy.json';
 
@@ -19,10 +20,17 @@ const SUPA_HEADERS = (env: Env) => ({
 	'Content-Type': 'application/json',
 });
 
+/**
+ * Fetches the latest product pricelist from Digiflazz API or local dummy fallback.
+ * Authenticates requests using MD5 signature: `md5(username + apiKey + "pricelist")`.
+ *
+ * @param env - Worker environment variables containing API keys and endpoints.
+ * @returns Promise resolving to array of `DigiflazzPriceItem` objects.
+ */
 async function fetchDigiflazzPriceList(env: Env): Promise<DigiflazzPriceItem[]> {
 	// Feature-flag: pakai dummy.json lokal (tanpa tembak API Digiflazz) utk dev/test.
 	if (env.DIGIFLAZZ_USE_DUMMY === 'true' || env.DIGIFLAZZ_USE_DUMMY === '1') {
-		console.log('sync: DIGIFLAZZ_USE_DUMMY=true, using local dummy.json');
+		logger.info('DIGIFLAZZ_USE_DUMMY=true, using local dummy.json');
 		if (Array.isArray(dummyData)) return dummyData as DigiflazzPriceItem[];
 		return (dummyData as { data?: DigiflazzPriceItem[] }).data ?? [];
 	}
@@ -150,7 +158,7 @@ async function markStale(env: Env, syncedSkus: string[]): Promise<{ marked: numb
 	if (existingSkus.length === 0) return { marked: 0, aborted: true };
 	const ratio = Number(env.STALE_GUARD_RATIO) || 0.3;
 	if (syncedSkus.length / existingSkus.length < ratio) {
-		console.warn(`sync: stale-guard abort (synced ${syncedSkus.length}/${existingSkus.length} < ${ratio}) — upstream likely partial`);
+		logger.warn('stale-guard abort — upstream likely partial', { synced: syncedSkus.length, existing: existingSkus.length, ratio });
 		return { marked: 0, aborted: true };
 	}
 	const current = new Set(existingSkus);
@@ -188,14 +196,14 @@ export async function runSync(env: Env): Promise<{ upserted: number; skipped: nu
 		const sku = item.buyer_sku_code;
 		if (!sku || sku === 'nan' || sku === 'undefined') {
 			skipped++;
-			console.warn(`sync: skip invalid sku "${sku}" (${item.product_name})`);
+			logger.warn('skip invalid sku', { sku, product_name: item.product_name });
 			continue;
 		}
 		const slug = brandToSlug(item.brand);
 		const game = gameLookup.get(slug) || gameLookup.get(brandToSlug(item.category)) || gameLookup.get(item.brand.trim().toLowerCase());
 		if (!game) {
 			skipped++;
-			console.warn(`sync: skip unmatched brand "${item.brand}" (sku ${item.buyer_sku_code})`);
+			logger.warn('skip unmatched brand', { brand: item.brand, sku: item.buyer_sku_code });
 			continue;
 		}
 		const categoryId = categoryLookup.get(item.category?.trim().toLowerCase() || '') ?? null;
@@ -218,10 +226,10 @@ export default {
 		ctx.waitUntil(
 			runSync(env)
 				.then((result) => {
-					console.log(`sync ok`, JSON.stringify(result));
+					logger.info('sync ok', { ...result });
 				})
 				.catch((error) => {
-					console.error(`sync failed`, error);
+					logger.error('sync failed', { err: error });
 				}),
 		);
 	},
@@ -245,11 +253,11 @@ export default {
 					headers: { 'Content-Type': 'application/json' },
 				});
 			}
-			console.log('sync: manual trigger via /__sync');
+			logger.info('manual trigger via /__sync');
 			ctx.waitUntil(
 				runSync(env)
-					.then((result) => console.log(`sync ok`, JSON.stringify(result)))
-					.catch((error) => console.error(`sync failed`, error)),
+					.then((result) => logger.info('sync ok', { ...result }))
+					.catch((error) => logger.error('sync failed', { err: error })),
 			);
 			return new Response(JSON.stringify({ ok: true, accepted: true }), {
 				headers: { 'Content-Type': 'application/json' },
