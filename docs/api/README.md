@@ -1,6 +1,6 @@
 **billowing-wildflower-a2e6**
 
-***
+---
 
 # FS-digiflaz-sync-worker
 
@@ -23,20 +23,20 @@ Cloudflare Worker (cron-scheduled) yang menarik daftar harga produk dari REST AP
 
 Vars:
 
-| Var | Deskripsi |
-|---|---|
-| `DIGIFLAZZ_BASE_URL` | Base URL API Digiflazz (`https://api.digiflazz.com/v1`) |
+| Var                   | Deskripsi                                                   |
+| --------------------- | ----------------------------------------------------------- |
+| `DIGIFLAZZ_BASE_URL`  | Base URL API Digiflazz (`https://api.digiflazz.com/v1`)     |
 | `DIGIFLAZZ_USE_DUMMY` | `true` → pakai `dummy.json` lokal (dev), `false` → API live |
-| `SUPABASE_URL` | URL Supabase project |
+| `SUPABASE_URL`        | URL Supabase project                                        |
 
 Secrets (via `npx wrangler secret put` / `secret bulk` — **jangan commit**):
 
-| Secret | Deskripsi |
-|---|---|
+| Secret                      | Deskripsi                                         |
+| --------------------------- | ------------------------------------------------- |
 | `SUPABASE_SERVICE_ROLE_KEY` | Key service role Supabase (untuk tulis lewat RLS) |
-| `DIGIFLAZZ_USERNAME` | Username akun Digiflazz |
-| `DIGIFLAZZ_API_KEY` | API key Digiflazz |
-| `SYNC_SECRET` | Token untuk guard `POST /__sync` (opsional) |
+| `DIGIFLAZZ_USERNAME`        | Username akun Digiflazz                           |
+| `DIGIFLAZZ_API_KEY`         | API key Digiflazz                                 |
+| `SYNC_SECRET`               | Token untuk guard `POST /__sync` (opsional)       |
 
 ## Commands
 
@@ -50,17 +50,17 @@ npm run cf-typegen   # regenerate worker-configuration.d.ts dari wrangler.jsonc 
 
 ## Mapping Digiflazz → `public.products`
 
-| Digiflazz | `products` column |
-|---|---|
-| `buyer_sku_code` | `id` (PK) + `sku` + `provider_ref` |
-| `product_name` | `title` |
-| `price` | `selling_price` |
-| `buyer_product_status` | `is_active` |
-| `desc` | `description` |
-| `start_cut_off` / `end_cut_off` | `start_cut_off` / `end_cut_off` |
-| brand → slug | `game_slug` |
-| `category` | `category_id` (resolve ke `product_categories.id`) |
-| — | `provider = 'digiflazz'`, `cost_price` default 0 |
+| Digiflazz                       | `products` column                                  |
+| ------------------------------- | -------------------------------------------------- |
+| `buyer_sku_code`                | `id` (PK) + `sku` + `provider_ref`                 |
+| `product_name`                  | `title`                                            |
+| `price`                         | `selling_price`                                    |
+| `buyer_product_status`          | `is_active`                                        |
+| `desc`                          | `description`                                      |
+| `start_cut_off` / `end_cut_off` | `start_cut_off` / `end_cut_off`                    |
+| brand → slug                    | `game_slug`                                        |
+| `category`                      | `category_id` (resolve ke `product_categories.id`) |
+| —                               | `provider = 'digiflazz'`, `cost_price` default 0   |
 
 Detail otoritatif: lihat `AGENTS.md` di repo ini.
 

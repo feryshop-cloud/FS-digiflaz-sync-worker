@@ -1,6 +1,6 @@
 [**billowing-wildflower-a2e6**](../README.md)
 
-***
+---
 
 [billowing-wildflower-a2e6](../globals.md) / default
 
@@ -14,7 +14,7 @@ Defined in: index.ts:224
 
 ### fetch()
 
-> **fetch**(`request`, `env`, `ctx`): `Promise`\<`Response`\>
+> **fetch**(`request`, `env`, `ctx`): `Promise`\<`Response`>\>
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: index.ts:224
 
 ### scheduled()
 
-> **scheduled**(`_event`, `env`, `ctx`): `Promise`\<`void`\>
+> **scheduled**(`_event`, `env`, `ctx`): `Promise`\<`void`>\>
 
 #### Parameters
 

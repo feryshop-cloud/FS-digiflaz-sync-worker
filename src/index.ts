@@ -63,6 +63,7 @@ async function fetchDigiflazzPriceList(env: Env): Promise<DigiflazzPriceItem[]> 
 interface GameRow {
 	slug: string;
 	name?: string | null;
+	code?: string | null;
 }
 
 interface CategoryRow {
@@ -72,7 +73,10 @@ interface CategoryRow {
 }
 
 async function fetchGames(env: Env): Promise<GameRow[]> {
-	const response = await fetch(`${env.SUPABASE_URL}/rest/v1/games?select=slug,name`, { headers: SUPA_HEADERS(env), cache: 'no-store' });
+	const response = await fetch(`${env.SUPABASE_URL}/rest/v1/games?select=slug,name,code`, {
+		headers: SUPA_HEADERS(env),
+		cache: 'no-store',
+	});
 	if (!response.ok) throw new Error(`games fetch HTTP ${response.status}`);
 	return (await response.json()) as GameRow[];
 }
@@ -88,8 +92,44 @@ async function fetchProductCategories(env: Env): Promise<CategoryRow[]> {
 
 /** Normalisasi brand Digiflazz → slug game (lowercase, spasi → dash). */
 function brandToSlug(brand: string): string {
-	return brand.trim().toLowerCase().replace(/\s+/g, '-');
+	return (brand || '')
+		.trim()
+		.toLowerCase()
+		.replace(/[^\w\s-]/g, '')
+		.replace(/\s+/g, '-');
 }
+
+const BRAND_ALIASES: Record<string, string> = {
+	'call of duty mobile': 'call-of-duty-mobile',
+	codm: 'call-of-duty-mobile',
+	'honor of kings': 'honor-of-kings',
+	hok: 'honor-of-kings',
+	'arena of valor': 'arena-of-valor',
+	aov: 'arena-of-valor',
+	'point blank': 'point-blank',
+	pb: 'point-blank',
+	'honkai star rail': 'honkai-star-rail',
+	'honkai: star rail': 'honkai-star-rail',
+	'zenless zone zero': 'zenless-zone-zero',
+	'league of legends: wild rift': 'league-of-legends-wild-rift',
+	'league of legends wild rift': 'league-of-legends-wild-rift',
+	'wild rift': 'league-of-legends-wild-rift',
+	'ragnarok origin': 'ragnarok-origin',
+	'steam wallet (idr)': 'steam-wallet',
+	'steam wallet idr': 'steam-wallet',
+	'steam wallet': 'steam-wallet',
+	steam: 'steam-wallet',
+	'mobile legends': 'mobile-legends',
+	'mobile legends: bang bang': 'mobile-legends',
+	mlbb: 'mobile-legends',
+	'free fire': 'free-fire',
+	ff: 'free-fire',
+	'pubg mobile': 'pubg-mobile',
+	pubgm: 'pubg-mobile',
+	valorant: 'valorant',
+	'genshin impact': 'genshin-impact',
+	roblox: 'roblox',
+};
 
 /** Build lookup: game slug → game, dan normalized name → game. */
 function buildGameLookup(games: GameRow[]): Map<string, GameRow> {
@@ -97,6 +137,7 @@ function buildGameLookup(games: GameRow[]): Map<string, GameRow> {
 	for (const game of games) {
 		lookup.set(game.slug, game);
 		if (game.name) lookup.set(brandToSlug(game.name), game);
+		if (game.code) lookup.set(game.code.toLowerCase(), game);
 	}
 	return lookup;
 }
@@ -199,8 +240,15 @@ export async function runSync(env: Env): Promise<{ upserted: number; skipped: nu
 			logger.warn('skip invalid sku', { sku, product_name: item.product_name });
 			continue;
 		}
-		const slug = brandToSlug(item.brand);
-		const game = gameLookup.get(slug) || gameLookup.get(brandToSlug(item.category)) || gameLookup.get(item.brand.trim().toLowerCase());
+		const rawBrand = (item.brand || '').trim().toLowerCase();
+		const rawCategory = (item.category || '').trim().toLowerCase();
+		const aliasSlug = BRAND_ALIASES[rawBrand] || BRAND_ALIASES[rawCategory] || brandToSlug(item.brand);
+
+		const game =
+			gameLookup.get(aliasSlug) ||
+			gameLookup.get(rawBrand) ||
+			gameLookup.get(brandToSlug(item.category || '')) ||
+			gameLookup.get(rawCategory);
 		if (!game) {
 			skipped++;
 			logger.warn('skip unmatched brand', { brand: item.brand, sku: item.buyer_sku_code });

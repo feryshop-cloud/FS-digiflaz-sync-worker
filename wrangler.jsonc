@@ -9,22 +9,20 @@
 			"enabled": true,
 			"head_sampling_rate": 1,
 			"persist": true,
-			"invocation_logs": true
+			"invocation_logs": true,
 		},
 		"traces": {
 			"enabled": false,
 			"persist": true,
-			"head_sampling_rate": 1
-		}
+			"head_sampling_rate": 1,
+		},
 	},
 	"vars": {
 		"DIGIFLAZZ_BASE_URL": "https://api.digiflazz.com/v1",
 		"DIGIFLAZZ_USE_DUMMY": "true",
-		"SUPABASE_URL": "https://xdvlygpaylnicojuvhyk.supabase.co"
+		"SUPABASE_URL": "https://xdvlygpaylnicojuvhyk.supabase.co",
 	},
 	"triggers": {
-		"crons": [
-			"0 */8 * * *"
-		]
-	}
+		"crons": ["0 */8 * * *"],
+	},
 }

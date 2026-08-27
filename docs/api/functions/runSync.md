@@ -1,6 +1,6 @@
 [**billowing-wildflower-a2e6**](../README.md)
 
-***
+---
 
 [billowing-wildflower-a2e6](../globals.md) / runSync
 
