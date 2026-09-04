@@ -66,13 +66,44 @@ jobs:
     steps:
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          DIGIFLAZZ_USERNAME: ${{ secrets.DIGIFLAZZ_USERNAME }}
+          DIGIFLAZZ_API_KEY: ${{ secrets.DIGIFLAZZ_API_KEY }}
+          DIGIFLAZZ_BASE_URL: ${{ secrets.DIGIFLAZZ_BASE_URL }}
+          DIGIFLAZZ_MIN_RESERVE: ${{ secrets.DIGIFLAZZ_MIN_RESERVE }}
+          DIGIFLAZZ_SERVICE_API_KEY: ${{ secrets.DIGIFLAZZ_SERVICE_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
+          envs: DIGIFLAZZ_USERNAME,DIGIFLAZZ_API_KEY,DIGIFLAZZ_BASE_URL,DIGIFLAZZ_MIN_RESERVE,DIGIFLAZZ_SERVICE_API_KEY,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,LOG_LEVEL
           script: |
             cd /opt/feryshop
+            touch .env
+            update_env() {
+              local key="$1"
+              local val="$2"
+              if [ -n "$val" ]; then
+                grep -v "^${key}=" .env > .env.tmp 2>/dev/null || true
+                mv .env.tmp .env
+                echo "${key}=${val}" >> .env
+              fi
+            }
+            update_env "DIGIFLAZZ_USERNAME" "$DIGIFLAZZ_USERNAME"
+            update_env "DIGIFLAZZ_API_KEY" "$DIGIFLAZZ_API_KEY"
+            update_env "DIGIFLAZZ_BASE_URL" "$DIGIFLAZZ_BASE_URL"
+            update_env "DIGIFLAZZ_MIN_RESERVE" "$DIGIFLAZZ_MIN_RESERVE"
+            update_env "DIGIFLAZZ_SERVICE_API_KEY" "$DIGIFLAZZ_SERVICE_API_KEY"
+            update_env "SUPABASE_URL" "$SUPABASE_URL"
+            update_env "NEXT_PUBLIC_SUPABASE_URL" "$SUPABASE_URL"
+            update_env "SUPABASE_SERVICE_ROLE_KEY" "$SUPABASE_SERVICE_ROLE_KEY"
+            update_env "LOG_LEVEL" "$LOG_LEVEL"
+
             docker compose -f docker-compose.prod.yml pull digiflazz-service
             docker compose -f docker-compose.prod.yml up -d --no-deps digiflazz-service
             docker image prune -f
+
