@@ -1,18 +1,20 @@
 {
-	"name": "billowing-wildflower-a2e6",
-	"version": "0.0.0",
-	"private": true,
-	"scripts": {
-		"deploy": "wrangler deploy",
-		"dev": "wrangler dev",
-		"start": "wrangler dev",
-		"test": "vitest",
-		"cf-typegen": "wrangler types"
-	},
-	"devDependencies": {
-		"@cloudflare/vitest-pool-workers": "^0.12.4",
-		"typescript": "^5.5.2",
-		"vitest": "~3.2.0",
-		"wrangler": "^4.119.0"
-	}
+  "name": "fs-digiflazz-service",
+  "version": "1.0.0",
+  "description": "Feryshop Digiflazz Microservice - Product Sync, Balance Check & Transaction Orchestration",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "test": "bun test",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\""
+  },
+  "dependencies": {
+    "hono": "^4.7.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "prettier": "^3.5.2",
+    "typescript": "^5.7.3"
+  }
 }

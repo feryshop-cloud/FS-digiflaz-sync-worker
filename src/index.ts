@@ -1,310 +1,142 @@
-import { md5hex } from './md5';
-import { logger } from './utils/logger';
-import type { DigiflazzPriceItem, SyncRow } from './types';
-import dummyData from '../dummy.json';
+import { Hono } from 'hono';
+import { config } from './config';
+import { logger } from './lib/logger';
+import { serviceAuthMiddleware } from './middleware/auth';
+import { errorHandler } from './middleware/error-handler';
+import { balanceService } from './balance/balance-service';
+import { transactionService } from './transaction/transaction-service';
+import { runProductSync } from './sync/product-sync';
+import { digiflazzClient } from './digiflazz/client';
+import { cronScheduler } from './cron/scheduler';
+import type { ExecuteTransactionParams } from './types/transaction';
 
-interface Env {
-	SUPABASE_URL: string;
-	SUPABASE_SERVICE_ROLE_KEY: string;
-	DIGIFLAZZ_USERNAME: string;
-	DIGIFLAZZ_API_KEY: string;
-	DIGIFLAZZ_BASE_URL: string;
-	DIGIFLAZZ_USE_DUMMY: string;
-	SYNC_SECRET?: string;
-	STALE_GUARD_RATIO?: string;
-}
+const app = new Hono();
 
-const SUPA_HEADERS = (env: Env) => ({
-	apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-	Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-	'Content-Type': 'application/json',
+// Global error handling
+app.onError(errorHandler);
+
+// Logger middleware
+app.use('*', async (c, next) => {
+	const start = Date.now();
+	await next();
+	const duration = Date.now() - start;
+	logger.info('HTTP request completed', {
+		method: c.req.method,
+		path: c.req.path,
+		status: c.res.status,
+		durationMs: duration,
+	});
 });
 
-/**
- * Fetches the latest product pricelist from Digiflazz API or local dummy fallback.
- * Authenticates requests using MD5 signature: `md5(username + apiKey + "pricelist")`.
- *
- * @param env - Worker environment variables containing API keys and endpoints.
- * @returns Promise resolving to array of `DigiflazzPriceItem` objects.
- */
-async function fetchDigiflazzPriceList(env: Env): Promise<DigiflazzPriceItem[]> {
-	// Feature-flag: pakai dummy.json lokal (tanpa tembak API Digiflazz) utk dev/test.
-	if (env.DIGIFLAZZ_USE_DUMMY === 'true' || env.DIGIFLAZZ_USE_DUMMY === '1') {
-		logger.info('DIGIFLAZZ_USE_DUMMY=true, using local dummy.json');
-		if (Array.isArray(dummyData)) return dummyData as DigiflazzPriceItem[];
-		return (dummyData as { data?: DigiflazzPriceItem[] }).data ?? [];
+// 1. Healthcheck (public / unauthenticated)
+app.get('/health', (c) => {
+	return c.json({
+		status: 'ok',
+		service: 'fs-digiflazz-service',
+		uptimeSeconds: Math.floor(process.uptime()),
+		timestamp: new Date().toISOString(),
+	});
+});
+
+// Backward compatibility healthcheck
+app.get('/__health', (c) => c.json({ ok: true }));
+
+// 2. Cek Saldo Deposit Digiflazz
+app.get('/v1/balance', serviceAuthMiddleware, async (c) => {
+	const force = c.req.query('refresh') === 'true';
+	const balance = await balanceService.getBalance(force);
+	return c.json({
+		ok: true,
+		data: balance,
+	});
+});
+
+// 3. Eksekusi Transaksi Top-Up
+app.post('/v1/transactions', serviceAuthMiddleware, async (c) => {
+	const body = await c.req.json<ExecuteTransactionParams>();
+
+	if (!body.orderId || !body.sku || !body.customerNo) {
+		return c.json(
+			{
+				ok: false,
+				error: 'ValidationFailed',
+				message: 'Field orderId, sku, dan customerNo wajib diisi',
+			},
+			400,
+		);
 	}
-	const base = env.DIGIFLAZZ_BASE_URL || 'https://api.digiflazz.com/v1';
-	const sign = md5hex(env.DIGIFLAZZ_USERNAME + env.DIGIFLAZZ_API_KEY + 'pricelist');
-	const response = await fetch(`${base}/price-list`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			cmd: 'prepaid',
-			username: env.DIGIFLAZZ_USERNAME,
-			sign,
-		}),
+
+	const result = await transactionService.executeTransaction(body);
+	const httpStatus = result.status === 'failed' && result.message.includes('mencukupi') ? 422 : 200;
+
+	return c.json(
+		{
+			ok: result.ok,
+			data: result,
+		},
+		httpStatus,
+	);
+});
+
+// 4. Cek Status Transaksi Spesifik
+app.get('/v1/transactions/:ref_id', serviceAuthMiddleware, async (c) => {
+	const refId = c.req.param('ref_id');
+	const sku = c.req.query('sku') || '';
+	const customerNo = c.req.query('customer_no') || '';
+
+	if (!refId || !sku || !customerNo) {
+		return c.json(
+			{
+				ok: false,
+				error: 'ValidationFailed',
+				message: 'Params ref_id, sku, dan customer_no wajib disertakan',
+			},
+			400,
+		);
+	}
+
+	const status = await digiflazzClient.checkTransactionStatus({
+		refId,
+		sku,
+		customerNo,
 	});
 
-	if (!response.ok) {
-		const body = await response.text();
-		throw new Error(`Digiflazz price-list HTTP ${response.status}: ${body}`);
-	}
-	const json = (await response.json()) as { data?: DigiflazzPriceItem[]; rc?: string; message?: string };
-	if (json.rc && json.rc !== '00') {
-		throw new Error(`Digiflazz price-list rc=${json.rc}: ${json.message}`);
-	}
-	if (!Array.isArray(json.data)) {
-		throw new Error('Digiflazz price-list response missing data array');
-	}
-	return json.data;
-}
-
-interface GameRow {
-	slug: string;
-	name?: string | null;
-	code?: string | null;
-}
-
-interface CategoryRow {
-	id: number;
-	title: string;
-	slug?: string | null;
-}
-
-async function fetchGames(env: Env): Promise<GameRow[]> {
-	const response = await fetch(`${env.SUPABASE_URL}/rest/v1/games?select=slug,name,code`, {
-		headers: SUPA_HEADERS(env),
-		cache: 'no-store',
+	return c.json({
+		ok: true,
+		data: status,
 	});
-	if (!response.ok) throw new Error(`games fetch HTTP ${response.status}`);
-	return (await response.json()) as GameRow[];
-}
+});
 
-async function fetchProductCategories(env: Env): Promise<CategoryRow[]> {
-	const response = await fetch(`${env.SUPABASE_URL}/rest/v1/product_categories?select=id,title,slug`, {
-		headers: SUPA_HEADERS(env),
-		cache: 'no-store',
-	});
-	if (!response.ok) throw new Error(`product_categories fetch HTTP ${response.status}`);
-	return (await response.json()) as CategoryRow[];
-}
+// 5. Trigger Manual Sinkronisasi Produk
+const handleSync = async (c: any) => {
+	logger.info('Manual product sync triggered via API');
+	// Jalankan secara asynchronous di background agar response tidak timeout
+	runProductSync()
+		.then((res) => logger.info('Manual sync completed successfully', { result: res }))
+		.catch((err) => logger.error('Manual sync failed', { error: err }));
 
-/** Normalisasi brand Digiflazz → slug game (lowercase, spasi → dash). */
-function brandToSlug(brand: string): string {
-	return (brand || '')
-		.trim()
-		.toLowerCase()
-		.replace(/[^\w\s-]/g, '')
-		.replace(/\s+/g, '-');
-}
-
-const BRAND_ALIASES: Record<string, string> = {
-	'call of duty mobile': 'call-of-duty-mobile',
-	codm: 'call-of-duty-mobile',
-	'honor of kings': 'honor-of-kings',
-	hok: 'honor-of-kings',
-	'point blank': 'point-blank',
-	pb: 'point-blank',
-	'mobile legends': 'mobile-legends',
-	'mobile legends: bang bang': 'mobile-legends',
-	mlbb: 'mobile-legends',
-	'free fire': 'free-fire',
-	ff: 'free-fire',
-	'free fire max': 'free-fire-max',
-	ffm: 'free-fire-max',
-	'pubg mobile': 'pubg-mobile',
-	pubgm: 'pubg-mobile',
-	valorant: 'valorant',
-	'genshin impact': 'genshin-impact',
-	'sausage man': 'sausage-man',
-	'magic chess': 'magic-chess',
-	'fc mobile': 'fc-mobile',
-	'metal slug awakening': 'metal-slug-awakening',
-	'war robots': 'war-robots',
-	'blood strike': 'blood-strike',
+	return c.json(
+		{
+			ok: true,
+			accepted: true,
+			message: 'Sinkronisasi produk telah dimulai di background',
+		},
+		202,
+	);
 };
 
-/** Build lookup: game slug → game, dan normalized name → game. */
-function buildGameLookup(games: GameRow[]): Map<string, GameRow> {
-	const lookup = new Map<string, GameRow>();
-	for (const game of games) {
-		lookup.set(game.slug, game);
-		if (game.name) lookup.set(brandToSlug(game.name), game);
-		if (game.code) lookup.set(game.code.toLowerCase(), game);
-	}
-	return lookup;
+app.post('/v1/sync', serviceAuthMiddleware, handleSync);
+app.post('/__sync', serviceAuthMiddleware, handleSync); // Backward compatibility endpoint
+
+// Jalankan background cron scheduler saat server start (hanya di luar test)
+if (process.env.NODE_ENV !== 'test') {
+	cronScheduler.start();
 }
 
-function buildCategoryLookup(categories: CategoryRow[]): Map<string, number> {
-	const lookup = new Map<string, number>();
-	for (const cat of categories) {
-		lookup.set(cat.title.trim().toLowerCase(), cat.id);
-		if (cat.slug) lookup.set(cat.slug.toLowerCase(), cat.id);
-	}
-	return lookup;
-}
-
-function mapItemToSyncRow(item: DigiflazzPriceItem, game: GameRow, categoryId: number | null): SyncRow {
-	const sku = item.buyer_sku_code;
-	return {
-		title: item.product_name,
-		selling_price: item.price,
-		game_slug: game.slug,
-		brand: item.brand,
-		category_id: categoryId,
-		description: item.desc,
-		start_cut_off: item.start_cut_off,
-		end_cut_off: item.end_cut_off,
-		is_active: item.buyer_product_status,
-		sku,
-		provider: 'digiflazz',
-		provider_ref: sku,
-	};
-}
-
-async function callSyncRpc(env: Env, rows: SyncRow[]): Promise<void> {
-	const response = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/sync_digiflazz_products`, {
-		method: 'POST',
-		headers: SUPA_HEADERS(env),
-		body: JSON.stringify({ payload: rows }),
-	});
-	if (!response.ok) {
-		const body = await response.text();
-		throw new Error(`sync RPC HTTP ${response.status}: ${body}`);
-	}
-}
-
-/**
- * Guard: jangan mark-stale semuanya saat data upstream kosong/parsial.
- * Return { marked, aborted: boolean }. Abaikan bila syncedIds kosong atau
- * batch yang disinkronkan jauh lebih kecil dari baseline existing (upstream
- * glitch/downstream reset) supaya tidak mematikan toko via NULL-deactivate.
- */
-async function markStale(env: Env, syncedSkus: string[]): Promise<{ marked: number; aborted: boolean }> {
-	if (syncedSkus.length === 0) return { marked: 0, aborted: true };
-	const response = await fetch(`${env.SUPABASE_URL}/rest/v1/products?select=sku&provider=eq.digiflazz&sku=not.is.null`, {
-		headers: SUPA_HEADERS(env),
-		cache: 'no-store',
-	});
-	if (!response.ok) throw new Error(`products fetch HTTP ${response.status}`);
-	const rows = (await response.json()) as { sku: string }[];
-	const existingSkus = rows.map((r) => r.sku);
-	if (existingSkus.length === 0) return { marked: 0, aborted: true };
-	const ratio = Number(env.STALE_GUARD_RATIO) || 0.3;
-	if (syncedSkus.length / existingSkus.length < ratio) {
-		logger.warn('stale-guard abort — upstream likely partial', { synced: syncedSkus.length, existing: existingSkus.length, ratio });
-		return { marked: 0, aborted: true };
-	}
-	const current = new Set(existingSkus);
-	const synced = new Set(syncedSkus);
-	const staleSkus = existingSkus.filter((sku) => !synced.has(sku));
-	if (staleSkus.length === 0) return { marked: 0, aborted: false };
-
-	// PATCH bulk via not.in; pecah per 100 sku agar URL tidak kepanjangan.
-	const CHUNK = 100;
-	for (let i = 0; i < staleSkus.length; i += CHUNK) {
-		const chunk = staleSkus.slice(i, i + CHUNK);
-		const filter = chunk.map((sku) => encodeURIComponent(sku)).join(',');
-		const patch = await fetch(`${env.SUPABASE_URL}/rest/v1/products?sku=in.(${filter})&provider=eq.digiflazz`, {
-			method: 'PATCH',
-			headers: SUPA_HEADERS(env),
-			body: JSON.stringify({ is_active: false, last_synced_at: new Date().toISOString() }),
-		});
-		if (!patch.ok) {
-			const body = await patch.text();
-			throw new Error(`stale PATCH HTTP ${patch.status}: ${body}`);
-		}
-	}
-	return { marked: staleSkus.length, aborted: false };
-}
-
-export async function runSync(env: Env): Promise<{ upserted: number; skipped: number; stale: number }> {
-	const [priceList, games, categories] = await Promise.all([fetchDigiflazzPriceList(env), fetchGames(env), fetchProductCategories(env)]);
-
-	const gameLookup = buildGameLookup(games);
-	const categoryLookup = buildCategoryLookup(categories);
-
-	const rows: SyncRow[] = [];
-	let skipped = 0;
-	for (const item of priceList) {
-		const sku = item.buyer_sku_code;
-		if (!sku || sku === 'nan' || sku === 'undefined') {
-			skipped++;
-			logger.warn('skip invalid sku', { sku, product_name: item.product_name });
-			continue;
-		}
-		const rawBrand = (item.brand || '').trim().toLowerCase();
-		const rawCategory = (item.category || '').trim().toLowerCase();
-		const aliasSlug = BRAND_ALIASES[rawBrand] || BRAND_ALIASES[rawCategory] || brandToSlug(item.brand);
-
-		const game =
-			gameLookup.get(aliasSlug) ||
-			gameLookup.get(rawBrand) ||
-			gameLookup.get(brandToSlug(item.category || '')) ||
-			gameLookup.get(rawCategory);
-		if (!game) {
-			skipped++;
-			logger.warn('skip unmatched brand', { brand: item.brand, sku: item.buyer_sku_code });
-			continue;
-		}
-		const categoryId = categoryLookup.get(item.category?.trim().toLowerCase() || '') ?? null;
-		rows.push(mapItemToSyncRow(item, game, categoryId));
-	}
-
-	if (rows.length > 0) {
-		await callSyncRpc(env, rows);
-	}
-
-	const stale = await markStale(
-		env,
-		rows.map((r) => r.sku),
-	);
-	return { upserted: rows.length, skipped, stale: stale.marked };
-}
+// Server startup via Bun
+logger.info(`Starting fs-digiflazz-service on port ${config.port} (env: ${config.nodeEnv})`);
 
 export default {
-	async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-		ctx.waitUntil(
-			runSync(env)
-				.then((result) => {
-					logger.info('sync ok', { ...result });
-				})
-				.catch((error) => {
-					logger.error('sync failed', { err: error });
-				}),
-		);
-	},
-	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		const url = new URL(request.url);
-		if (url.pathname === '/__health') {
-			return new Response(JSON.stringify({ ok: true }), {
-				headers: { 'Content-Type': 'application/json' },
-			});
-		}
-		if (url.pathname === '/__sync' && request.method === 'POST') {
-			// Auth wajib: tanpa token sah, jangan tarik prices list + tulis DB pakai service-role.
-			const expected = env.SYNC_SECRET;
-			const supplied = request.headers.get('Authorization')?.trim();
-			const suppliedBearer = supplied?.startsWith('Bearer ') ? supplied.slice(7).trim() : null;
-			const viaHeader = request.headers.get('x-sync-token')?.trim();
-			const token = suppliedBearer || viaHeader;
-			if (!expected || token !== expected) {
-				return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), {
-					status: 401,
-					headers: { 'Content-Type': 'application/json' },
-				});
-			}
-			logger.info('manual trigger via /__sync');
-			ctx.waitUntil(
-				runSync(env)
-					.then((result) => logger.info('sync ok', { ...result }))
-					.catch((error) => logger.error('sync failed', { err: error })),
-			);
-			return new Response(JSON.stringify({ ok: true, accepted: true }), {
-				headers: { 'Content-Type': 'application/json' },
-			});
-		}
-		return new Response('Not found', { status: 404 });
-	},
-} satisfies ExportedHandler<Env>;
+	port: config.port,
+	fetch: app.fetch,
+};

@@ -1,75 +1,60 @@
-# AGENTS.md — FS-digiflaz-sync-worker
+# AGENTS.md — FS-digiflazz-service
 
-Cloudflare Worker (cron-scheduled) yang menarik daftar harga produk Digiflaz dari REST API pihak ketiga, lalu menyinkronkannya ke tabel `public.products` pada Supabase project game-inventory (`trviikqvvujcibplqwud`). Worker berjalan periodik via `Scheduled` handler.
+Microservice terisolasi berbasis **Bun 1.4 + Hono + Docker** yang menjadi pusat integrasi API Digiflazz untuk seluruh ekosistem Feryshop:
+1. **Sinkronisasi Katalog Produk**: Menarik pricelist dari Digiflazz API secara berkala dan sinkronisasi ke tabel `public.products` di Supabase.
+2. **Cek Saldo Deposit**: Memeriksa saldo deposit via `POST /v1/cek-saldo` dengan in-memory caching.
+3. **Validasi Pre-Transaksional**: Memastikan saldo deposit mencukupi (`saldo >= harga_produk + min_reserve`) sebelum transaksi diproses.
+4. **Eksekusi & Orkestrasi Transaksi**: Menjalankan transaksi top-up setelah payment gateway mengonfirmasi pembayaran lunas (`payment.paid`).
+5. **Background Reconciler**: Memeriksa status transaksi pending secara berkala dan memperbarui tabel `digiflazz_transactions` serta `orders`.
 
-Repro model: satu Worker (pola sama seperti `FS-email-worker`).
+Target deployment: **Docker container di VPS** terhubung ke bridge network `feryshop-network`.
 
-## Data source & target
-
-- **Sumber**: REST API harga produk (format sama persis dengan `dummy.json` di root — array of item: `product_name`, `category`, `brand`, `type`, `seller_name`, `price`, `buyer_sku_code`, `buyer_product_status`, `seller_product_status`, `unlimited_stock`, `stock`, `multi`, `start_cut_off`, `end_cut_off`, `desc`). Lihat `dummy.json` untuk bentuk konkret data.
-- **Target**: tabel `public.products` — definisi kolom otoritatif di `FS-Public/src/lib/db/schema.ts` (baris `products = pgTable(...)`) dan awal migrasi `game-inventori/supabase/migrations/`.
-
-## Mapping Digiflaz → `public.products` (wajib, jangan tebak)
-
-| dummy.json / Digiflaz                         | `products` column                                                         |
-| --------------------------------------------- | ------------------------------------------------------------------------- |
-| (tidak dikirim; DB generate)                  | `id` (uuid PK, default `gen_random_uuid()`)                               |
-| `buyer_sku_code`                              | `sku` (unique index parsial, upsert key)                                  |
-| (harus diturunkan dari `buyer_sku_code`/game) | `game_slug`                                                               |
-| `product_name`                                | `title`                                                                   |
-| `price`                                       | `selling_price`                                                           |
-| `buyer_product_status`                        | `is_active`                                                               |
-| harga referensi (gold/platinum)               | `selling_price_gold`, `selling_price_platinum`                            |
-| opsional                                      | `cost_price` (default `0`), `sku` = `id`, `is_gangguan` (default `false`) |
-| `category` (dummy.json)                       | `category_id` — resolve ke `categories.id`                                |
-
-`products.id` = UUID (default DB). `sku` = buyer_sku_code, index unique parsial. Sync **upsert by `sku`** (INSERT … ON CONFLICT (sku) DO UPDATE) supaya harga aktif diperbarui tanpa duplikat; `id` dibiarkan default DB.
+---
 
 ## Commands
 
-| Command              | Apa                                                                                     |
-| -------------------- | --------------------------------------------------------------------------------------- |
-| `npm run dev`        | `wrangler dev` lokal                                                                    |
-| `npm run deploy`     | `wrangler deploy` ke Cloudflare                                                         |
-| `npm run test`       | vitest                                                                                  |
-| `npm run cf-typegen` | regenerate `worker-configuration.d.ts` dari `wrangler.jsonc` (**jangan diedit manual**) |
+| Command | Keterangan |
+|---|---|
+| `bun run dev` | Menjalankan service secara lokal dengan auto-reload (`src/index.ts`) |
+| `bun run start` | Menjalankan production server |
+| `bun test` | Menjalankan seluruh unit test suite |
+| `bun run format` | Menjalankan formatting kode dengan Prettier |
 
-## Konfigurasi (`wrangler.jsonc`)
+---
 
-- Set `name` + `compatibility_date` sebelum deploy.
-- Definisikan `Env` bindings + `[vars]` untuk `SUPABASE_URL` dan `SUPABASE_SERVICE_ROLE_KEY`.
-- Cron scheduling lewat `[triggers] cron` / `crons` field. Verifikasi sintaks di `wrangler.jsonc`.
-- `tsconfig.json` > kumpulkan `src/**/*.ts`; `worker-configuration.d.ts` **generated**.
+## API Endpoints (Internal Network)
 
-## Keamanan (kritikal)
+| Method | Endpoint | Auth | Deskripsi |
+|---|---|---|---|
+| `GET` | `/health` | Publik | Healthcheck status liveness container |
+| `GET` | `/v1/balance` | Service Key | Cek saldo deposit Digiflazz saat ini (`?refresh=true` untuk force refresh) |
+| `POST` | `/v1/transactions` | Service Key | Eksekusi transaksi top-up Digiflazz |
+| `GET` | `/v1/transactions/:ref_id` | Service Key | Cek status transaksi Digiflazz spesifik (`?sku=...&customer_no=...`) |
+| `POST` | `/v1/sync` | Service Key | Trigger manual sinkronisasi produk (asinkron di background) |
 
-- **Jangan pernah commit `service_role_key` ke siapa pun.** Worker ini butuh Service Role Key utk tulis ke `products` melewati RLS — simpan via `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`, **bukan** di `[vars]`/`.env`/wrangler.jsonc.
-- Worker tidak punya filesystem: env di-set via `wrangler secret put` / `[vars]`, bukan `.env`.
-- Format target adalah **remote Digiflazz** — hindari menyimulasikan harga/stok. Ambil dari REST API live.
+---
 
-## Runtime constraint
+## Environment Variables
 
-Cloudflare Workers = V8 isolate, bukan Node.js: tanpa filesystem, tanpa `dotenv`, tanpa modul Node.js bawaan kecuali di-bundle. Akses Supabase via global `fetch()` ke `SUPABASE_URL/rest/v1/products` + header `apikey` / `Authorization: Bearer <service_role>`:
+| Variable | Wajib | Deskripsi | Default |
+|---|---|---|---|
+| `PORT` | Tidak | Port HTTP server | `3002` |
+| `NODE_ENV` | Tidak | Environment runtime (`production`, `development`, `test`) | `development` |
+| `DIGIFLAZZ_USERNAME` | Ya (Prod) | Username akun Digiflazz | - |
+| `DIGIFLAZZ_API_KEY` | Ya (Prod) | Production API key Digiflazz | - |
+| `DIGIFLAZZ_BASE_URL` | Tidak | Endpoint dasar API Digiflazz | `https://api.digiflazz.com/v1` |
+| `DIGIFLAZZ_USE_DUMMY` | Tidak | Flag gunakan fixture `dummy.json` (tanpa API live) | `false` |
+| `DIGIFLAZZ_MIN_RESERVE` | Tidak | Batas minimum saldo cadangan (IDR) | `50000` |
+| `SUPABASE_URL` | Ya (Prod) | URL REST endpoint Supabase | - |
+| `SUPABASE_SERVICE_ROLE_KEY` | Ya (Prod) | Secret key Supabase untuk akses DB | - |
+| `DIGIFLAZZ_SERVICE_API_KEY` | Ya (Prod) | Secret key autentikasi inter-service antar container | - |
+| `SYNC_SECRET` | Tidak | Secret key kompatibilitas lama untuk `/v1/sync` | - |
+| `STALE_GUARD_RATIO` | Tidak | Rasio perlindungan de-aktivasi massal produk | `0.3` |
 
-- GET `…/products` utk ambil data lama, filter `game_slug`, `is_active`.
-- POST/PATCH (REST) untuk insert/update; atau panggil RPC di `game-inventori/supabase/migrations/*` utk upsert massal.
+---
 
-## Testing
+## Keamanan & Guardrails
 
-- vitest + `@cloudflare/vitest-pool-workers`; config `vitest.config.mts` refer `wrangler.jsonc`.
-- Tes di `test/`; `test/env.d.ts` declare `cloudflare:test`.
-- Lari satu: `npx vitest run test/sync.spec.ts`.
-- Jangan bunuh endpoint live tiap tes; mock `fetch` untuk Digiflazz & Supabase.
-
-## Style
-
-- Indentasi: **tabs** (`.editorconfig`)
-- Print width: **140** (`.prettierrc`)
-- Single quotes, semicolon, trailing whitespace trim, final newline wajib.
-
-## Pipeline kerja agent
-
-1. Kosong awal — `dummy.json` sebagai referensi format target.
-2. Init: pastikan `npm run cf-typegen` dijalankan ulang setelah ubah `wrangler.jsonc` (bindings baru mengubah `worker-configuration.d.ts`).
-3. Worker: `Scheduled` handler + `fetch` handler untuk healthcheck (pola `FS-email-worker`).
-4. Sinkronisasi upsert → test (mock live) → `npm run lint`; `npm run build` (PowerShell: tanpa `&&`).
+1. **Jaringan Internal**: Service ini berjalan di dalam network Docker bridge `feryshop-network` di VPS dan **TIDAK** diekspos langsung ke internet publik via port mapping ataupun Nginx.
+2. **IP Whitelisting**: Request keluar ke API Digiflazz wajib berasal dari IP VPS yang telah di-whitelist di dashboard resmi Digiflazz.
+3. **Secret Protection**: Jangan pernah melakukan commit file `.env` atau `.dev.vars` yang memuat `DIGIFLAZZ_API_KEY` atau `SUPABASE_SERVICE_ROLE_KEY`.

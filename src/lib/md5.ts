@@ -1,5 +1,4 @@
-// Minimal pure-TS MD5 (Cloudflare Workers: WebCrypto tidak menyediakan MD5).
-// Implementasi referensi RFC 1321 (diringkas, cukup untuk sign Digiflazz).
+// Minimal pure-TS MD5 (RFC 1321) for Digiflazz signature generation.
 
 const S: number[] = [
 	7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11,
@@ -39,7 +38,6 @@ export function md5hex(input: string): string {
 	padded[idx + 1] = (bitLen >>> 8) & 0xff;
 	padded[idx + 2] = (bitLen >>> 16) & 0xff;
 	padded[idx + 3] = (bitLen >>> 24) & 0xff;
-	// tinggi (32-bit atas) = 0
 
 	let a0 = 0x67452301;
 	let b0 = 0xefcdab89;

@@ -1,5 +1,3 @@
-declare const process: { env?: Record<string, string | undefined> } | undefined;
-
 const LOG_LEVEL_NUM = { debug: 20, info: 30, warn: 40, error: 50 };
 
 function serializeError(error: unknown): unknown {
@@ -19,12 +17,11 @@ function serializeError(error: unknown): unknown {
 }
 
 function write(level: keyof typeof LOG_LEVEL_NUM, message: string, meta?: Record<string, unknown>): void {
-	const nodeEnv =
-		typeof process !== 'undefined' && process.env?.NODE_ENV && process.env.NODE_ENV !== 'undefined' ? process.env.NODE_ENV : 'production';
+	const nodeEnv = process.env.NODE_ENV || 'production';
 	const payload: Record<string, unknown> = {
 		level: LOG_LEVEL_NUM[level],
 		time: Date.now(),
-		service: 'fs-digiflaz-sync-worker',
+		service: 'fs-digiflazz-service',
 		environment: nodeEnv,
 		msg: message,
 	};
