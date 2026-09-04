@@ -8,6 +8,7 @@ import { transactionService } from './transaction/transaction-service';
 import { runProductSync } from './sync/product-sync';
 import { digiflazzClient } from './digiflazz/client';
 import { cronScheduler } from './cron/scheduler';
+import { register, httpRequestsTotal, httpRequestDurationSeconds } from './lib/metrics';
 import type { ExecuteTransactionParams } from './types/transaction';
 
 const app = new Hono();
@@ -15,16 +16,22 @@ const app = new Hono();
 // Global error handling
 app.onError(errorHandler);
 
-// Logger middleware
+// HTTP Logging and Prometheus Metrics middleware
 app.use('*', async (c, next) => {
 	const start = Date.now();
 	await next();
-	const duration = Date.now() - start;
+	const durationMs = Date.now() - start;
+	const route = c.req.path;
+	const statusCode = String(c.res.status);
+
+	httpRequestsTotal.inc({ method: c.req.method, route, status_code: statusCode });
+	httpRequestDurationSeconds.observe({ method: c.req.method, route, status_code: statusCode }, durationMs / 1000);
+
 	logger.info('HTTP request completed', {
 		method: c.req.method,
 		path: c.req.path,
 		status: c.res.status,
-		durationMs: duration,
+		durationMs,
 	});
 });
 
@@ -40,6 +47,12 @@ app.get('/health', (c) => {
 
 // Backward compatibility healthcheck
 app.get('/__health', (c) => c.json({ ok: true }));
+
+// Prometheus Metrics Scrape Endpoint (public for internal monitoring network)
+app.get('/metrics', async (c) => {
+	c.header('Content-Type', register.contentType);
+	return c.text(await register.metrics());
+});
 
 // 2. Cek Saldo Deposit Digiflazz
 app.get('/v1/balance', serviceAuthMiddleware, async (c) => {

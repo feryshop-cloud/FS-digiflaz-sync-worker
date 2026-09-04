@@ -147,10 +147,10 @@ export class SupabaseClient {
 		return (await response.json()) as DigiflazzTransactionRecord[];
 	}
 
-	async updateOrderStatus(orderId: string, status: { fulfillmentStatus?: string; serialNumber?: string }): Promise<void> {
+	async updateOrderStatus(orderId: string, status: { buyStatus?: string; serialNumber?: string }): Promise<void> {
 		if (!this.url || !this.key) return;
 		const patchPayload: Record<string, unknown> = {};
-		if (status.fulfillmentStatus) patchPayload.fulfillment_status = status.fulfillmentStatus;
+		if (status.buyStatus) patchPayload.buy_status = status.buyStatus.toLowerCase();
 		if (status.serialNumber) patchPayload.serial_number = status.serialNumber;
 
 		const response = await fetch(`${this.url}/rest/v1/orders?order_id=eq.${encodeURIComponent(orderId)}`, {

@@ -43,7 +43,7 @@ export async function reconcilePendingTransactions(): Promise<{ reconciled: numb
 					});
 
 					await supabaseClient.updateOrderStatus(tx.order_id, {
-						fulfillmentStatus: 'SUCCESS',
+						buyStatus: 'success',
 						serialNumber: sn,
 					});
 
@@ -62,7 +62,7 @@ export async function reconcilePendingTransactions(): Promise<{ reconciled: numb
 					});
 
 					await supabaseClient.updateOrderStatus(tx.order_id, {
-						fulfillmentStatus: 'FAILED',
+						buyStatus: 'failed',
 					});
 
 					reconciledCount++;

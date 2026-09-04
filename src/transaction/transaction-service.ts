@@ -3,6 +3,7 @@ import { supabaseClient } from '../supabase/client';
 import { balanceService } from '../balance/balance-service';
 import { validateSufficientBalance } from '../balance/validation';
 import { logger } from '../lib/logger';
+import { digiflazzTransactionsTotal } from '../lib/metrics';
 import type {
 	ExecuteTransactionParams,
 	ExecuteTransactionResult,
@@ -98,11 +99,11 @@ export class TransactionService {
 				logger.error('Failed to update transaction in Supabase', { refId, error: err });
 			});
 
-			// 5. Jika sukses, perbarui fulfillment status pesanan utama
+			// 5. Jika sukses, perbarui buyStatus pesanan utama
 			if (status === 'success') {
 				await supabaseClient
 					.updateOrderStatus(orderId, {
-						fulfillmentStatus: 'SUCCESS',
+						buyStatus: 'success',
 						serialNumber: sn,
 					})
 					.catch((err) => {
@@ -111,12 +112,14 @@ export class TransactionService {
 			} else if (status === 'failed') {
 				await supabaseClient
 					.updateOrderStatus(orderId, {
-						fulfillmentStatus: 'FAILED',
+						buyStatus: 'failed',
 					})
 					.catch((err) => {
 						logger.error('Failed to mark order as FAILED in Supabase', { orderId, error: err });
 					});
 			}
+
+			digiflazzTransactionsTotal.inc({ status, sku });
 
 			return {
 				ok: status === 'success' || status === 'pending',
@@ -131,6 +134,7 @@ export class TransactionService {
 			};
 		} catch (error) {
 			logger.error('Digiflazz API execution failed', { refId, orderId, error });
+			digiflazzTransactionsTotal.inc({ status: 'unknown', sku });
 
 			await supabaseClient
 				.updateTransaction(refId, {

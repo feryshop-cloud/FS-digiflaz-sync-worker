@@ -1,5 +1,6 @@
 import { digiflazzClient } from '../digiflazz/client';
 import { logger } from '../lib/logger';
+import { digiflazzBalanceDeposit } from '../lib/metrics';
 
 interface CachedBalance {
 	deposit: number;
@@ -34,6 +35,7 @@ export class BalanceService {
 				deposit: res.deposit,
 				timestamp: now,
 			};
+			digiflazzBalanceDeposit.set(res.deposit);
 			return {
 				deposit: res.deposit,
 				cached: false,
@@ -61,6 +63,7 @@ export class BalanceService {
 			deposit: newDeposit,
 			timestamp: Date.now(),
 		};
+		digiflazzBalanceDeposit.set(newDeposit);
 	}
 }
 
