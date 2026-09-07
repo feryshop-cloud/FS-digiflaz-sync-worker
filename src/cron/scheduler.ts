@@ -18,11 +18,11 @@ export class CronScheduler {
 			runProductSync().catch((err) => logger.error('Scheduled sync failed', { error: err }));
 		}, EIGHT_HOURS);
 
-		// 2. Reconcile transaksi pending setiap 2 menit (120.000 ms)
-		const TWO_MINUTES = 2 * 60 * 1000;
+		// 2. Reconcile transaksi pending setiap 10 menit (600.000 ms) sebagai safety fallback jika webhook terlewat
+		const TEN_MINUTES = 10 * 60 * 1000;
 		this.reconcilerInterval = setInterval(() => {
 			reconcilePendingTransactions().catch((err) => logger.error('Scheduled reconciler failed', { error: err }));
-		}, TWO_MINUTES);
+		}, TEN_MINUTES);
 
 		// 3. Cek saldo Digiflazz setiap 30 menit untuk refresh cache & alert jika menipis
 		const THIRTY_MINUTES = 30 * 60 * 1000;

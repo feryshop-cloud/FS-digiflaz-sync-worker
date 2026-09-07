@@ -28,9 +28,11 @@ Target deployment: **Docker container di VPS** terhubung ke bridge network `fery
 |---|---|---|---|
 | `GET` | `/health` | Publik | Healthcheck status liveness container |
 | `GET` | `/v1/balance` | Service Key | Cek saldo deposit Digiflazz saat ini (`?refresh=true` untuk force refresh) |
+| `POST` | `/v1/deposit` | Service Key | Request tiket deposit Digiflazz via transfer bank |
 | `POST` | `/v1/transactions` | Service Key | Eksekusi transaksi top-up Digiflazz |
 | `GET` | `/v1/transactions/:ref_id` | Service Key | Cek status transaksi Digiflazz spesifik (`?sku=...&customer_no=...`) |
 | `POST` | `/v1/sync` | Service Key | Trigger manual sinkronisasi produk (asinkron di background) |
+| `POST` | `/v1/webhook` | HMAC SHA-1 (`X-Hub-Signature`) | Callback ingress dari Digiflazz untuk pembaruan status transaksi real-time |
 
 ---
 
@@ -45,6 +47,8 @@ Target deployment: **Docker container di VPS** terhubung ke bridge network `fery
 | `DIGIFLAZZ_BASE_URL` | Tidak | Endpoint dasar API Digiflazz | `https://api.digiflazz.com/v1` |
 | `DIGIFLAZZ_USE_DUMMY` | Tidak | Flag gunakan fixture `dummy.json` (tanpa API live) | `false` |
 | `DIGIFLAZZ_MIN_RESERVE` | Tidak | Batas minimum saldo cadangan (IDR) | `50000` |
+| `DIGIFLAZZ_WEBHOOK_URL` | Tidak | Callback URL yang dikirim ke Digiflazz saat transaksi | `https://feryshop.com/webhooks/digiflazz` |
+| `DIGIFLAZZ_WEBHOOK_SECRET`| Ya (Prod) | Secret key untuk validasi `X-Hub-Signature` webhook | - |
 | `SUPABASE_URL` | Ya (Prod) | URL REST endpoint Supabase | - |
 | `SUPABASE_SERVICE_ROLE_KEY` | Ya (Prod) | Secret key Supabase untuk akses DB | - |
 | `DIGIFLAZZ_SERVICE_API_KEY` | Ya (Prod) | Secret key autentikasi inter-service antar container | - |
@@ -55,6 +59,8 @@ Target deployment: **Docker container di VPS** terhubung ke bridge network `fery
 
 ## Keamanan & Guardrails
 
-1. **Jaringan Internal**: Service ini berjalan di dalam network Docker bridge `feryshop-network` di VPS dan **TIDAK** diekspos langsung ke internet publik via port mapping ataupun Nginx.
-2. **IP Whitelisting**: Request keluar ke API Digiflazz wajib berasal dari IP VPS yang telah di-whitelist di dashboard resmi Digiflazz.
-3. **Secret Protection**: Jangan pernah melakukan commit file `.env` atau `.dev.vars` yang memuat `DIGIFLAZZ_API_KEY` atau `SUPABASE_SERVICE_ROLE_KEY`.
+1. **Jaringan Internal & Ingress Terkontrol**: Service ini berjalan di dalam network Docker bridge `feryshop-network` di VPS dan **TIDAK** diekspos port-nya langsung ke internet publik. Lalu lintas publik masuk secara terkontrol hanya via Nginx Gateway (`/webhooks/digiflazz` -> `/v1/webhook`).
+2. **Validasi Signature Webhook**: Endpoint `/v1/webhook` memvalidasi signature header `X-Hub-Signature` (HMAC SHA-1) secara timing-safe terhadap secret key webhook yang terdaftar di Panel Digiflazz.
+3. **IP Whitelisting**: Request keluar ke API Digiflazz wajib berasal dari IP VPS yang telah di-whitelist di dashboard resmi Digiflazz.
+4. **Secret Protection**: Jangan pernah melakukan commit file `.env` atau `.dev.vars` yang memuat `DIGIFLAZZ_API_KEY`, `DIGIFLAZZ_WEBHOOK_SECRET`, atau `SUPABASE_SERVICE_ROLE_KEY`.
+

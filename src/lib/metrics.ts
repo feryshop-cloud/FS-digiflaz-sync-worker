@@ -59,3 +59,11 @@ export const digiflazzSyncItemsCount = new Gauge({
 	labelNames: ['type'] as const, // 'upserted' | 'skipped' | 'stale'
 	registers: [register],
 });
+
+// 5. Webhook Metrics
+export const digiflazzWebhooksReceivedTotal = new Counter({
+	name: 'digiflazz_webhooks_received_total',
+	help: 'Total number of Digiflazz webhook notifications received',
+	labelNames: ['event', 'status'] as const,
+	registers: [register],
+});

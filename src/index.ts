@@ -9,9 +9,10 @@ import { runProductSync } from './sync/product-sync';
 import { digiflazzClient } from './digiflazz/client';
 import { cronScheduler } from './cron/scheduler';
 import { register, httpRequestsTotal, httpRequestDurationSeconds } from './lib/metrics';
+import { handleDigiflazzWebhook } from './webhook/handler';
 import type { ExecuteTransactionParams } from './types/transaction';
 
-const app = new Hono();
+export const app = new Hono();
 
 // Global error handling
 app.onError(errorHandler);
@@ -189,6 +190,10 @@ const handleSync = async (c: any) => {
 
 app.post('/v1/sync', serviceAuthMiddleware, handleSync);
 app.post('/__sync', serviceAuthMiddleware, handleSync); // Backward compatibility endpoint
+
+// 6. Webhook Ingress (Digiflazz Callback)
+// Catatan: Tidak menggunakan serviceAuthMiddleware karena otentikasi divalidasi via HMAC SHA-1 (X-Hub-Signature)
+app.post('/v1/webhook', handleDigiflazzWebhook);
 
 // Jalankan background cron scheduler saat server start (hanya di luar test)
 if (process.env.NODE_ENV !== 'test') {

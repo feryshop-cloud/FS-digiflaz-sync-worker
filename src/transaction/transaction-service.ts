@@ -4,6 +4,8 @@ import { balanceService } from '../balance/balance-service';
 import { validateSufficientBalance } from '../balance/validation';
 import { logger } from '../lib/logger';
 import { digiflazzTransactionsTotal } from '../lib/metrics';
+import { config } from '../config';
+
 import type {
 	ExecuteTransactionParams,
 	ExecuteTransactionResult,
@@ -11,7 +13,7 @@ import type {
 	TransactionStatus,
 } from '../types/transaction';
 
-function parseDigiflazzStatus(rc?: string, statusText?: string): TransactionStatus {
+export function parseDigiflazzStatus(rc?: string, statusText?: string): TransactionStatus {
 	if (rc === '00' || statusText?.toLowerCase() === 'sukses') return 'success';
 	if (rc === '01' || statusText?.toLowerCase() === 'pending') return 'pending';
 	if (rc === '02' || statusText?.toLowerCase() === 'gagal' || statusText?.toLowerCase() === 'batal') return 'failed';
@@ -75,6 +77,7 @@ export class TransactionService {
 				customerNo,
 				refId,
 				testing,
+				cbUrl: config.digiflazz.webhookUrl,
 			});
 
 			const status = parseDigiflazzStatus(apiRes?.rc, apiRes?.status);

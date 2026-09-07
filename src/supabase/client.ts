@@ -147,6 +147,17 @@ export class SupabaseClient {
 		return (await response.json()) as DigiflazzTransactionRecord[];
 	}
 
+	async getTransactionByRefId(refId: string): Promise<DigiflazzTransactionRecord | null> {
+		if (!this.url || !this.key) return null;
+		const response = await fetch(`${this.url}/rest/v1/digiflazz_transactions?ref_id=eq.${encodeURIComponent(refId)}&limit=1`, {
+			headers: this.headers(),
+			cache: 'no-store',
+		});
+		if (!response.ok) return null;
+		const rows = (await response.json()) as DigiflazzTransactionRecord[];
+		return rows[0] || null;
+	}
+
 	async updateOrderStatus(orderId: string, status: { buyStatus?: string; serialNumber?: string }): Promise<void> {
 		if (!this.url || !this.key) return;
 		const patchPayload: Record<string, unknown> = {};

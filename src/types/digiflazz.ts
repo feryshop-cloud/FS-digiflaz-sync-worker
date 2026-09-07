@@ -81,3 +81,25 @@ export interface DigiflazzDepositTicketResponse {
 	rc?: string;
 	message?: string;
 }
+
+export type DigiflazzWebhookEventType = 'create' | 'update' | 'resend' | 'ping';
+
+export interface DigiflazzWebhookItem {
+	ref_id: string;
+	customer_no: string;
+	buyer_sku_code: string;
+	message: string;
+	status: string; // 'Sukses' | 'Pending' | 'Gagal'
+	rc: string;
+	sn?: string;
+	buyer_last_saldo?: number;
+	price?: number;
+	tele?: string;
+	wa?: string;
+}
+
+export interface DigiflazzWebhookPayload {
+	data?: DigiflazzWebhookItem;
+	event?: string;
+	message?: string;
+}

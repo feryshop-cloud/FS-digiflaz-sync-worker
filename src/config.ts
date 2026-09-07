@@ -7,6 +7,8 @@ export interface AppConfig {
 		baseUrl: string;
 		useDummy: boolean;
 		minReserve: number;
+		webhookUrl?: string;
+		webhookSecret?: string;
 	};
 	supabase: {
 		url: string;
@@ -35,6 +37,8 @@ export function loadConfig(): AppConfig {
 			baseUrl: (process.env.DIGIFLAZZ_BASE_URL || 'https://api.digiflazz.com/v1').trim().replace(/\/+$/, ''),
 			useDummy,
 			minReserve: Number(process.env.DIGIFLAZZ_MIN_RESERVE) || 50000,
+			webhookUrl: (process.env.DIGIFLAZZ_WEBHOOK_URL || '').trim() || undefined,
+			webhookSecret: (process.env.DIGIFLAZZ_WEBHOOK_SECRET || '').trim() || undefined,
 		},
 		supabase: {
 			url: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '',
