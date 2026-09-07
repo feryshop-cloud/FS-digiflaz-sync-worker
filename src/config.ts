@@ -30,9 +30,9 @@ export function loadConfig(): AppConfig {
 		port,
 		nodeEnv,
 		digiflazz: {
-			username: process.env.DIGIFLAZZ_USERNAME || '',
-			apiKey: process.env.DIGIFLAZZ_API_KEY || '',
-			baseUrl: process.env.DIGIFLAZZ_BASE_URL || 'https://api.digiflazz.com/v1',
+			username: (process.env.DIGIFLAZZ_USERNAME || '').trim(),
+			apiKey: (process.env.DIGIFLAZZ_API_KEY || '').trim(),
+			baseUrl: (process.env.DIGIFLAZZ_BASE_URL || 'https://api.digiflazz.com/v1').trim().replace(/\/+$/, ''),
 			useDummy,
 			minReserve: Number(process.env.DIGIFLAZZ_MIN_RESERVE) || 50000,
 		},
