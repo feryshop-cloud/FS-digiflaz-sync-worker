@@ -58,3 +58,25 @@ export interface DigiflazzTransactionResponse {
 	rc?: string;
 	message?: string;
 }
+
+export interface DigiflazzDepositTicketRequest {
+	amount: number;
+	bank: string;
+	ownerName: string;
+}
+
+export interface DigiflazzDepositTicketData {
+	rc: string;
+	bank: string;
+	payment_method: string;
+	account_no: string;
+	notes: string;
+	amount: number;
+	message?: string;
+}
+
+export interface DigiflazzDepositTicketResponse {
+	data?: DigiflazzDepositTicketData;
+	rc?: string;
+	message?: string;
+}

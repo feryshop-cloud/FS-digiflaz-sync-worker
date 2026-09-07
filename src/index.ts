@@ -64,6 +64,55 @@ app.get('/v1/balance', serviceAuthMiddleware, async (c) => {
 	});
 });
 
+// 2b. Request Tiket Deposit Digiflazz
+app.post('/v1/deposit', serviceAuthMiddleware, async (c) => {
+	const body = await c.req.json<{ amount?: number; bank?: string; ownerName?: string }>();
+
+	if (!body.amount || body.amount < 10000) {
+		return c.json(
+			{
+				ok: false,
+				error: 'ValidationFailed',
+				message: 'Nominal deposit minimal Rp 10.000',
+			},
+			400,
+		);
+	}
+
+	if (!body.bank || typeof body.bank !== 'string') {
+		return c.json(
+			{
+				ok: false,
+				error: 'ValidationFailed',
+				message: 'Nama bank tujuan wajib diisi',
+			},
+			400,
+		);
+	}
+
+	if (!body.ownerName || typeof body.ownerName !== 'string') {
+		return c.json(
+			{
+				ok: false,
+				error: 'ValidationFailed',
+				message: 'Nama pemilik rekening wajib diisi',
+			},
+			400,
+		);
+	}
+
+	const ticket = await digiflazzClient.createDepositTicket({
+		amount: Math.floor(body.amount),
+		bank: body.bank.trim(),
+		ownerName: body.ownerName.trim(),
+	});
+
+	return c.json({
+		ok: true,
+		data: ticket,
+	});
+});
+
 // 3. Eksekusi Transaksi Top-Up
 app.post('/v1/transactions', serviceAuthMiddleware, async (c) => {
 	const body = await c.req.json<ExecuteTransactionParams>();

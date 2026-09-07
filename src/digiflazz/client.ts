@@ -6,6 +6,9 @@ import type {
 	DigiflazzPriceListResponse,
 	DigiflazzBalanceResponse,
 	DigiflazzTransactionResponse,
+	DigiflazzDepositTicketRequest,
+	DigiflazzDepositTicketData,
+	DigiflazzDepositTicketResponse,
 } from '../types/digiflazz';
 import dummyData from '../../dummy.json';
 
@@ -100,6 +103,63 @@ export class DigiflazzClient {
 
 		const deposit = json.data?.deposit ?? 0;
 		return { deposit, raw: json };
+	}
+
+	/**
+	 * Membuat tiket deposit saldo Digiflazz.
+	 * Sign: md5(username + apiKey + "deposit")
+	 */
+	async createDepositTicket(params: DigiflazzDepositTicketRequest): Promise<DigiflazzDepositTicketData> {
+		if (this.useDummy) {
+			logger.info('DIGIFLAZZ_USE_DUMMY=true, returning mock deposit ticket', {
+				amount: params.amount,
+				bank: params.bank,
+			});
+			const uniqueCode = Math.floor(Math.random() * 900) + 100;
+			const totalAmount = params.amount + uniqueCode;
+			return {
+				rc: '00',
+				bank: params.bank.toUpperCase(),
+				payment_method: 'Bank Transfer',
+				account_no: '0123 4567 89',
+				notes: 'MOCK-DEP-' + Date.now().toString(36).toUpperCase(),
+				amount: totalAmount,
+				message: 'Tiket deposit berhasil dibuat (MOCK)',
+			};
+		}
+
+		if (!this.username || !this.apiKey) {
+			throw new Error('Digiflazz credentials (username/apiKey) not configured');
+		}
+
+		const sign = md5hex(this.username + this.apiKey + 'deposit');
+		const response = await fetch(`${this.baseUrl}/deposit`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				username: this.username,
+				amount: params.amount,
+				bank: params.bank,
+				owner_name: params.ownerName,
+				sign,
+			}),
+		});
+
+		if (!response.ok) {
+			const body = await response.text();
+			throw new Error(`Digiflazz deposit HTTP ${response.status}: ${body}`);
+		}
+
+		const json = (await response.json()) as DigiflazzDepositTicketResponse;
+		if (json.rc && json.rc !== '00') {
+			throw new Error(`Digiflazz deposit rc=${json.rc}: ${json.message || 'Gagal membuat tiket deposit'}`);
+		}
+
+		if (!json.data) {
+			throw new Error('Digiflazz deposit response missing data payload');
+		}
+
+		return json.data;
 	}
 
 	/**
