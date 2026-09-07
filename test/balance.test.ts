@@ -40,5 +40,6 @@ describe('Balance Service & Validation', () => {
 		expect(ticket.amount).toBeGreaterThanOrEqual(500_000);
 		expect(ticket.account_no).toBeTruthy();
 		expect(ticket.notes).toBeTruthy();
+		expect(ticket.expires_at).toBeTruthy();
 	});
 });

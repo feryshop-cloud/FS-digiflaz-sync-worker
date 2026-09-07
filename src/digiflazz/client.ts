@@ -117,6 +117,7 @@ export class DigiflazzClient {
 			});
 			const uniqueCode = Math.floor(Math.random() * 900) + 100;
 			const totalAmount = params.amount + uniqueCode;
+			const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
 			return {
 				rc: '00',
 				bank: params.bank.toUpperCase(),
@@ -124,6 +125,7 @@ export class DigiflazzClient {
 				account_no: '0123 4567 89',
 				notes: 'MOCK-DEP-' + Date.now().toString(36).toUpperCase(),
 				amount: totalAmount,
+				expires_at: expiresAt,
 				message: 'Tiket deposit berhasil dibuat (MOCK)',
 			};
 		}
@@ -159,7 +161,12 @@ export class DigiflazzClient {
 			throw new Error('Digiflazz deposit response missing data payload');
 		}
 
-		return json.data;
+		const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+
+		return {
+			...json.data,
+			expires_at: expiresAt,
+		};
 	}
 
 	/**

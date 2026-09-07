@@ -72,6 +72,7 @@ export interface DigiflazzDepositTicketData {
 	account_no: string;
 	notes: string;
 	amount: number;
+	expires_at: string;
 	message?: string;
 }
 
