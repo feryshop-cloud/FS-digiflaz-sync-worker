@@ -4,6 +4,8 @@ export interface AppConfig {
 	digiflazz: {
 		username: string;
 		apiKey: string;
+		prodApiKey: string;
+		devApiKey: string;
 		baseUrl: string;
 		useDummy: boolean;
 		minReserve: number;
@@ -28,12 +30,18 @@ export function loadConfig(): AppConfig {
 	const port = Number(process.env.PORT) || 3002;
 	const useDummy = process.env.DIGIFLAZZ_USE_DUMMY === 'true' || process.env.DIGIFLAZZ_USE_DUMMY === '1' || nodeEnv === 'test';
 
+	const rawApiKey = (process.env.DIGIFLAZZ_API_KEY || '').trim();
+	const prodApiKey = (process.env.DIGIFLAZZ_PROD_KEY || (rawApiKey.startsWith('dev-') ? '' : rawApiKey)).trim();
+	const devApiKey = (process.env.DIGIFLAZZ_DEV_KEY || (rawApiKey.startsWith('dev-') ? rawApiKey : '')).trim();
+
 	return {
 		port,
 		nodeEnv,
 		digiflazz: {
 			username: (process.env.DIGIFLAZZ_USERNAME || '').trim(),
-			apiKey: (process.env.DIGIFLAZZ_API_KEY || '').trim(),
+			apiKey: rawApiKey || prodApiKey || devApiKey,
+			prodApiKey,
+			devApiKey,
 			baseUrl: (process.env.DIGIFLAZZ_BASE_URL || 'https://api.digiflazz.com/v1').trim().replace(/\/+$/, ''),
 			useDummy,
 			minReserve: Number(process.env.DIGIFLAZZ_MIN_RESERVE) || 50000,

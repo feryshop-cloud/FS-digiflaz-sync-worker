@@ -43,7 +43,9 @@ Target deployment: **Docker container di VPS** terhubung ke bridge network `fery
 | `PORT` | Tidak | Port HTTP server | `3002` |
 | `NODE_ENV` | Tidak | Environment runtime (`production`, `development`, `test`) | `development` |
 | `DIGIFLAZZ_USERNAME` | Ya (Prod) | Username akun Digiflazz | - |
-| `DIGIFLAZZ_API_KEY` | Ya (Prod) | Production API key Digiflazz | - |
+| `DIGIFLAZZ_API_KEY` | Opsional | Fallback API key Digiflazz (legacy) | - |
+| `DIGIFLAZZ_PROD_KEY` | Ya (Prod) | Production API key (untuk cek saldo, pricelist, deposit, & transaksi live) | - |
+| `DIGIFLAZZ_DEV_KEY` | Opsional | Development API key (khusus pengujian / test-case `testing: true`) | - |
 | `DIGIFLAZZ_BASE_URL` | Tidak | Endpoint dasar API Digiflazz | `https://api.digiflazz.com/v1` |
 | `DIGIFLAZZ_USE_DUMMY` | Tidak | Flag gunakan fixture `dummy.json` (tanpa API live) | `false` |
 | `DIGIFLAZZ_MIN_RESERVE` | Tidak | Batas minimum saldo cadangan (IDR) | `50000` |

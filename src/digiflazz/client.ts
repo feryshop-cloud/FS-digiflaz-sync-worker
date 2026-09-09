@@ -15,19 +15,32 @@ import dummyData from '../../dummy.json';
 export class DigiflazzClient {
 	private username: string;
 	private apiKey: string;
+	private prodApiKey: string;
+	private devApiKey: string;
 	private baseUrl: string;
 	private useDummy: boolean;
 
 	constructor() {
 		this.username = config.digiflazz.username;
 		this.apiKey = config.digiflazz.apiKey;
+		this.prodApiKey = config.digiflazz.prodApiKey || config.digiflazz.apiKey;
+		this.devApiKey = config.digiflazz.devApiKey || config.digiflazz.apiKey;
 		this.baseUrl = config.digiflazz.baseUrl;
 		this.useDummy = config.digiflazz.useDummy;
 	}
 
+	private getProductionKey(): string {
+		return this.prodApiKey || this.apiKey;
+	}
+
+	private getDevelopmentKey(): string {
+		return this.devApiKey || this.apiKey;
+	}
+
 	/**
 	 * Mengambil daftar harga produk dari Digiflazz API atau fallback dummy.
-	 * Sign: md5(username + apiKey + "pricelist")
+	 * Menggunakan Production Key (Digiflazz hanya mengizinkan prod key untuk pricelist).
+	 * Sign: md5(username + prodApiKey + "pricelist")
 	 */
 	async fetchPriceList(): Promise<DigiflazzPriceItem[]> {
 		if (this.useDummy) {
@@ -36,11 +49,12 @@ export class DigiflazzClient {
 			return (dummyData as { data?: DigiflazzPriceItem[] }).data ?? [];
 		}
 
-		if (!this.username || !this.apiKey) {
-			throw new Error('Digiflazz credentials (username/apiKey) not configured');
+		const key = this.getProductionKey();
+		if (!this.username || !key) {
+			throw new Error('Digiflazz production credentials (username/prodApiKey) not configured');
 		}
 
-		const sign = md5hex(this.username + this.apiKey + 'pricelist');
+		const sign = md5hex(this.username + key + 'pricelist');
 		const response = await fetch(`${this.baseUrl}/price-list`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -68,7 +82,8 @@ export class DigiflazzClient {
 
 	/**
 	 * Cek saldo deposit Digiflazz.
-	 * Sign: md5(username + apiKey + "depo")
+	 * Menggunakan Production Key (Digiflazz hanya mengizinkan prod key untuk cek saldo).
+	 * Sign: md5(username + prodApiKey + "depo")
 	 */
 	async checkBalance(): Promise<{ deposit: number; raw?: unknown }> {
 		if (this.useDummy) {
@@ -76,11 +91,12 @@ export class DigiflazzClient {
 			return { deposit: 10_000_000 };
 		}
 
-		if (!this.username || !this.apiKey) {
-			throw new Error('Digiflazz credentials (username/apiKey) not configured');
+		const key = this.getProductionKey();
+		if (!this.username || !key) {
+			throw new Error('Digiflazz production credentials (username/prodApiKey) not configured');
 		}
 
-		const sign = md5hex(this.username + this.apiKey + 'depo');
+		const sign = md5hex(this.username + key + 'depo');
 		const response = await fetch(`${this.baseUrl}/cek-saldo`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -107,7 +123,8 @@ export class DigiflazzClient {
 
 	/**
 	 * Membuat tiket deposit saldo Digiflazz.
-	 * Sign: md5(username + apiKey + "deposit")
+	 * Menggunakan Production Key.
+	 * Sign: md5(username + prodApiKey + "deposit")
 	 */
 	async createDepositTicket(params: DigiflazzDepositTicketRequest): Promise<DigiflazzDepositTicketData> {
 		if (this.useDummy) {
@@ -130,11 +147,12 @@ export class DigiflazzClient {
 			};
 		}
 
-		if (!this.username || !this.apiKey) {
-			throw new Error('Digiflazz credentials (username/apiKey) not configured');
+		const key = this.getProductionKey();
+		if (!this.username || !key) {
+			throw new Error('Digiflazz production credentials (username/prodApiKey) not configured');
 		}
 
-		const sign = md5hex(this.username + this.apiKey + 'deposit');
+		const sign = md5hex(this.username + key + 'deposit');
 		const response = await fetch(`${this.baseUrl}/deposit`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -171,7 +189,9 @@ export class DigiflazzClient {
 
 	/**
 	 * Melakukan eksekusi transaksi ke Digiflazz API.
-	 * Sign: md5(username + apiKey + ref_id)
+	 * Jika params.testing === true, menggunakan Development Key.
+	 * Jika transaksi riil, menggunakan Production Key.
+	 * Sign: md5(username + (devKey|prodKey) + ref_id)
 	 */
 	async createTransaction(params: {
 		sku: string;
@@ -197,11 +217,14 @@ export class DigiflazzClient {
 			};
 		}
 
-		if (!this.username || !this.apiKey) {
-			throw new Error('Digiflazz credentials (username/apiKey) not configured');
+		const isTesting = params.testing === true;
+		const key = isTesting ? this.getDevelopmentKey() : this.getProductionKey();
+		if (!this.username || !key) {
+			const label = isTesting ? 'development credentials (username/devApiKey)' : 'production credentials (username/prodApiKey)';
+			throw new Error(`Digiflazz ${label} not configured`);
 		}
 
-		const sign = md5hex(this.username + this.apiKey + params.refId);
+		const sign = md5hex(this.username + key + params.refId);
 		const payload: Record<string, unknown> = {
 			username: this.username,
 			buyer_sku_code: params.sku,

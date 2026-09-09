@@ -69,12 +69,12 @@ app.get('/v1/balance', serviceAuthMiddleware, async (c) => {
 app.post('/v1/deposit', serviceAuthMiddleware, async (c) => {
 	const body = await c.req.json<{ amount?: number; bank?: string; ownerName?: string }>();
 
-	if (!body.amount || body.amount < 10000) {
+	if (!body.amount || body.amount < 1000) {
 		return c.json(
 			{
 				ok: false,
 				error: 'ValidationFailed',
-				message: 'Nominal deposit minimal Rp 10.000',
+				message: 'Nominal deposit minimal Rp 1.000',
 			},
 			400,
 		);
