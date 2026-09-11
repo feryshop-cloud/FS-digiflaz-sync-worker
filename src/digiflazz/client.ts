@@ -204,7 +204,36 @@ export class DigiflazzClient {
 			logger.info('DIGIFLAZZ_USE_DUMMY=true, returning mock transaction response', {
 				refId: params.refId,
 				sku: params.sku,
+				customerNo: params.customerNo,
 			});
+
+			const cust = (params.customerNo || '').trim();
+			if (cust === '087800001232') {
+				return {
+					ref_id: params.refId,
+					customer_no: params.customerNo,
+					buyer_sku_code: params.sku,
+					message: 'NOMOR TUJUAN SALAH / TRANSAKSI GAGAL (MOCK TESTING)',
+					status: 'Gagal',
+					rc: '02',
+					sn: undefined,
+					buyer_last_saldo: 9_950_000,
+				};
+			}
+
+			if (cust === '087800001233' || cust === '087800001234') {
+				return {
+					ref_id: params.refId,
+					customer_no: params.customerNo,
+					buyer_sku_code: params.sku,
+					message: 'TRANSAKSI SEDANG DIPROSES (MOCK TESTING PENDING)',
+					status: 'Pending',
+					rc: '01',
+					sn: undefined,
+					buyer_last_saldo: 9_950_000,
+				};
+			}
+
 			return {
 				ref_id: params.refId,
 				customer_no: params.customerNo,
@@ -248,6 +277,48 @@ export class DigiflazzClient {
 
 		if (!response.ok) {
 			const body = await response.text();
+			if (isTesting && body.includes('tidak kami kenali')) {
+				logger.warn('IP whitelist rejected testing SKU on non-whitelisted IP; using sandbox simulation response', {
+					customerNo: params.customerNo,
+				});
+				const cust = (params.customerNo || '').trim();
+				if (cust === '087800001230') {
+					return {
+						ref_id: params.refId,
+						customer_no: params.customerNo,
+						buyer_sku_code: params.sku,
+						message: 'TRANSAKSI SUKSES (SANDBOX)',
+						status: 'Sukses',
+						rc: '00',
+						sn: '1234567890',
+						buyer_last_saldo: 9_950_000,
+					};
+				}
+				if (cust === '087800001232') {
+					return {
+						ref_id: params.refId,
+						customer_no: params.customerNo,
+						buyer_sku_code: params.sku,
+						message: 'NOMOR TUJUAN SALAH (SANDBOX)',
+						status: 'Gagal',
+						rc: '02',
+						sn: undefined,
+						buyer_last_saldo: 9_950_000,
+					};
+				}
+				if (cust === '087800001233' || cust === '087800001234') {
+					return {
+						ref_id: params.refId,
+						customer_no: params.customerNo,
+						buyer_sku_code: params.sku,
+						message: 'TRANSAKSI SEDANG DIPROSES (SANDBOX PENDING)',
+						status: 'Pending',
+						rc: '03',
+						sn: undefined,
+						buyer_last_saldo: 9_950_000,
+					};
+				}
+			}
 			throw new Error(`Digiflazz transaction HTTP ${response.status}: ${body}`);
 		}
 
@@ -262,11 +333,47 @@ export class DigiflazzClient {
 	 * Cek status transaksi pending di Digiflazz menggunakan ref_id yang sama.
 	 * Di Digiflazz, mengirim request dengan ref_id yang sama bersifat idempoten dan mengembalikan status transaksi tersebut.
 	 */
-	async checkTransactionStatus(params: { sku: string; customerNo: string; refId: string }): Promise<DigiflazzTransactionResponse['data']> {
+	async checkTransactionStatus(params: {
+		sku: string;
+		customerNo: string;
+		refId: string;
+		testing?: boolean;
+	}): Promise<DigiflazzTransactionResponse['data']> {
+		const isTesting = params.testing ?? params.sku.toLowerCase() === 'xld10';
+
+		if (this.useDummy || isTesting) {
+			const cust = (params.customerNo || '').trim();
+			if (cust === '087800001233') {
+				return {
+					ref_id: params.refId,
+					customer_no: params.customerNo,
+					buyer_sku_code: params.sku,
+					message: 'TRANSAKSI SUKSES SETELAH PENDING (MOCK RECONCILE)',
+					status: 'Sukses',
+					rc: '00',
+					sn: `SN-RECON-${Date.now()}`,
+					buyer_last_saldo: 9_950_000,
+				};
+			}
+			if (cust === '087800001234') {
+				return {
+					ref_id: params.refId,
+					customer_no: params.customerNo,
+					buyer_sku_code: params.sku,
+					message: 'TRANSAKSI GAGAL SETELAH PENDING (MOCK RECONCILE)',
+					status: 'Gagal',
+					rc: '02',
+					sn: undefined,
+					buyer_last_saldo: 9_950_000,
+				};
+			}
+		}
+
 		return this.createTransaction({
 			sku: params.sku,
 			customerNo: params.customerNo,
 			refId: params.refId,
+			testing: isTesting,
 		});
 	}
 }

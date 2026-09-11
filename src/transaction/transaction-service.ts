@@ -15,7 +15,7 @@ import type {
 
 export function parseDigiflazzStatus(rc?: string, statusText?: string): TransactionStatus {
 	if (rc === '00' || statusText?.toLowerCase() === 'sukses') return 'success';
-	if (rc === '01' || statusText?.toLowerCase() === 'pending') return 'pending';
+	if (rc === '01' || rc === '03' || statusText?.toLowerCase() === 'pending') return 'pending';
 	if (rc === '02' || statusText?.toLowerCase() === 'gagal' || statusText?.toLowerCase() === 'batal') return 'failed';
 	return 'unknown';
 }
@@ -31,13 +31,14 @@ export class TransactionService {
 	 */
 	async executeTransaction(params: ExecuteTransactionParams): Promise<ExecuteTransactionResult> {
 		const { orderId, sku, customerNo, amount = 0, testing = false } = params;
+		const isTesting = Boolean(testing) || sku.toLowerCase() === 'xld10';
 		const refId = `FS-${orderId}-${Date.now()}`;
 
-		logger.info('Executing Digiflazz transaction', { orderId, refId, sku, customerNo, amount });
+		logger.info('Executing Digiflazz transaction', { orderId, refId, sku, customerNo, amount, isTesting });
 
-		// 1. Validasi Saldo Pre-Transaksional jika amount > 0
+		// 1. Validasi Saldo Pre-Transaksional jika amount > 0 dan bukan mode testing sandbox
 		let balanceBefore: number | undefined;
-		if (amount > 0) {
+		if (amount > 0 && !isTesting) {
 			const validation = await validateSufficientBalance(amount);
 			balanceBefore = validation.currentBalance;
 			if (!validation.ok) {
@@ -49,6 +50,14 @@ export class TransactionService {
 					message: validation.reason || 'Saldo deposit Digiflazz tidak mencukupi',
 					balanceBefore,
 				};
+			}
+		} else if (isTesting) {
+			// Pada testing sandbox, cukup ambil saldo saat ini tanpa memblokir
+			try {
+				const current = await balanceService.getBalance(false);
+				balanceBefore = current.deposit;
+			} catch {
+				balanceBefore = 0;
 			}
 		}
 
@@ -76,7 +85,7 @@ export class TransactionService {
 				sku,
 				customerNo,
 				refId,
-				testing,
+				testing: isTesting,
 				cbUrl: config.digiflazz.webhookUrl,
 			});
 

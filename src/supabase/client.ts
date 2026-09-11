@@ -82,7 +82,7 @@ export class SupabaseClient {
 		}
 
 		const synced = new Set(syncedSkus);
-		const staleSkus = existingSkus.filter((sku) => !synced.has(sku));
+		const staleSkus = existingSkus.filter((sku) => !synced.has(sku) && sku.toLowerCase() !== 'xld10');
 		if (staleSkus.length === 0) return { marked: 0, aborted: false };
 
 		const CHUNK = 100;
