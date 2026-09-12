@@ -69,6 +69,8 @@ jobs:
         env:
           DIGIFLAZZ_USERNAME: ${{ secrets.DIGIFLAZZ_USERNAME }}
           DIGIFLAZZ_API_KEY: ${{ secrets.DIGIFLAZZ_API_KEY }}
+          DIGIFLAZZ_PROD_KEY: ${{ secrets.DIGIFLAZZ_PROD_KEY }}
+          DIGIFLAZZ_DEV_KEY: ${{ secrets.DIGIFLAZZ_DEV_KEY }}
           DIGIFLAZZ_BASE_URL: ${{ secrets.DIGIFLAZZ_BASE_URL }}
           DIGIFLAZZ_MIN_RESERVE: ${{ secrets.DIGIFLAZZ_MIN_RESERVE }}
           DIGIFLAZZ_SERVICE_API_KEY: ${{ secrets.DIGIFLAZZ_SERVICE_API_KEY }}
@@ -80,7 +82,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          envs: DIGIFLAZZ_USERNAME,DIGIFLAZZ_API_KEY,DIGIFLAZZ_BASE_URL,DIGIFLAZZ_MIN_RESERVE,DIGIFLAZZ_SERVICE_API_KEY,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,LOG_LEVEL
+          envs: DIGIFLAZZ_USERNAME,DIGIFLAZZ_API_KEY,DIGIFLAZZ_PROD_KEY,DIGIFLAZZ_DEV_KEY,DIGIFLAZZ_BASE_URL,DIGIFLAZZ_MIN_RESERVE,DIGIFLAZZ_SERVICE_API_KEY,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,LOG_LEVEL
           script: |
             cd /opt/feryshop
             touch .env
@@ -95,6 +97,8 @@ jobs:
             }
             update_env "DIGIFLAZZ_USERNAME" "$DIGIFLAZZ_USERNAME"
             update_env "DIGIFLAZZ_API_KEY" "$DIGIFLAZZ_API_KEY"
+            update_env "DIGIFLAZZ_PROD_KEY" "$DIGIFLAZZ_PROD_KEY"
+            update_env "DIGIFLAZZ_DEV_KEY" "$DIGIFLAZZ_DEV_KEY"
             update_env "DIGIFLAZZ_BASE_URL" "$DIGIFLAZZ_BASE_URL"
             update_env "DIGIFLAZZ_MIN_RESERVE" "$DIGIFLAZZ_MIN_RESERVE"
             update_env "DIGIFLAZZ_SERVICE_API_KEY" "$DIGIFLAZZ_SERVICE_API_KEY"
