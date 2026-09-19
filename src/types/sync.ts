@@ -13,6 +13,7 @@ export interface CategoryRow {
 export interface SyncRow {
 	title: string;
 	selling_price: number;
+	cost_price: number;
 	game_slug: string;
 	brand: string;
 	category_id: number | null;

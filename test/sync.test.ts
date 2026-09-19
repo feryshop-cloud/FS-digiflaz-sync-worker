@@ -61,6 +61,7 @@ describe('Product Sync Helpers', () => {
 
 		expect(row.title).toBe('86 Diamonds');
 		expect(row.selling_price).toBe(19500);
+		expect(row.cost_price).toBe(19500);
 		expect(row.game_slug).toBe('mobile-legends');
 		expect(row.category_id).toBe(1);
 		expect(row.sku).toBe('MLBB-86');
