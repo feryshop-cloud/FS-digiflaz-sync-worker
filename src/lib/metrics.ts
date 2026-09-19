@@ -53,12 +53,17 @@ export const digiflazzSyncDurationSeconds = new Gauge({
 	registers: [register],
 });
 
-export const digiflazzSyncItemsCount = new Gauge({
+export const digiflazzSyncItemsCount = new Counter({
 	name: 'digiflazz_sync_items_count',
-	help: 'Count of items processed during product sync',
+	help: 'Cumulative count of items processed during product sync',
 	labelNames: ['type'] as const, // 'upserted' | 'skipped' | 'stale'
 	registers: [register],
 });
+
+// Zero-initialize metric labels so Prometheus discovers time-series on startup
+digiflazzSyncItemsCount.inc({ type: 'upserted' }, 0);
+digiflazzSyncItemsCount.inc({ type: 'skipped' }, 0);
+digiflazzSyncItemsCount.inc({ type: 'stale' }, 0);
 
 // 5. Webhook Metrics
 export const digiflazzWebhooksReceivedTotal = new Counter({

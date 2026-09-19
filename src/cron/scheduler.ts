@@ -7,9 +7,26 @@ export class CronScheduler {
 	private syncInterval: ReturnType<typeof setInterval> | null = null;
 	private reconcilerInterval: ReturnType<typeof setInterval> | null = null;
 	private balanceInterval: ReturnType<typeof setInterval> | null = null;
+	private initialSyncTimeout: ReturnType<typeof setTimeout> | null = null;
+	private initialReconcileTimeout: ReturnType<typeof setTimeout> | null = null;
+	private initialBalanceTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	start(): void {
 		logger.info('Starting internal background scheduler...');
+
+		// Initial runs shortly after startup to immediately populate metrics and sync state
+		this.initialBalanceTimeout = setTimeout(() => {
+			balanceService.getBalance(true).catch((err) => logger.error('Initial balance check failed', { error: err }));
+		}, 3000);
+
+		this.initialSyncTimeout = setTimeout(() => {
+			logger.info('Initial product sync triggered on startup');
+			runProductSync().catch((err) => logger.error('Initial sync failed', { error: err }));
+		}, 10000);
+
+		this.initialReconcileTimeout = setTimeout(() => {
+			reconcilePendingTransactions().catch((err) => logger.error('Initial reconciler failed', { error: err }));
+		}, 15000);
 
 		// 1. Sinkronisasi produk setiap 8 jam (28.800.000 ms)
 		const EIGHT_HOURS = 8 * 60 * 60 * 1000;
@@ -32,6 +49,9 @@ export class CronScheduler {
 	}
 
 	stop(): void {
+		if (this.initialSyncTimeout) clearTimeout(this.initialSyncTimeout);
+		if (this.initialReconcileTimeout) clearTimeout(this.initialReconcileTimeout);
+		if (this.initialBalanceTimeout) clearTimeout(this.initialBalanceTimeout);
 		if (this.syncInterval) clearInterval(this.syncInterval);
 		if (this.reconcilerInterval) clearInterval(this.reconcilerInterval);
 		if (this.balanceInterval) clearInterval(this.balanceInterval);

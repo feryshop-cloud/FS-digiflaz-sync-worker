@@ -108,9 +108,9 @@ export async function runProductSync(): Promise<SyncResult> {
 		const durationSeconds = (Date.now() - startTime) / 1000;
 		digiflazzSyncTotal.inc({ status: 'success' });
 		digiflazzSyncDurationSeconds.set(durationSeconds);
-		digiflazzSyncItemsCount.set({ type: 'upserted' }, rows.length);
-		digiflazzSyncItemsCount.set({ type: 'skipped' }, skipped);
-		digiflazzSyncItemsCount.set({ type: 'stale' }, stale.marked);
+		if (rows.length > 0) digiflazzSyncItemsCount.inc({ type: 'upserted' }, rows.length);
+		if (skipped > 0) digiflazzSyncItemsCount.inc({ type: 'skipped' }, skipped);
+		if (stale.marked > 0) digiflazzSyncItemsCount.inc({ type: 'stale' }, stale.marked);
 
 		logger.info('Product sync completed successfully', { ...result, durationSeconds });
 		return result;
